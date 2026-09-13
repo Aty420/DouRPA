@@ -12,6 +12,8 @@ app_hiddenimports = [
     'app.main_window_v211',
     'app.main_window_v212',
     'app.main_window_v213',
+    'app.main_window_v214',
+    'app.main_window_v215',
     'app.db',
     'app.excel_service',
     'app.rpa.browser',

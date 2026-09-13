@@ -8,7 +8,7 @@ from PySide6.QtGui import QFont, QIcon
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from app.main_window_v213 import MainWindow
+from app.main_window_v215 import MainWindow
 from app.theme import APP_STYLESHEET
 
 
@@ -47,16 +47,13 @@ def bootstrap_user_files() -> Path:
 
 
 def enable_windows_backdrop(window):
-    """Best-effort Windows 11 Mica backdrop. Older Windows silently falls back."""
     if sys.platform != "win32":
         return
     try:
         hwnd = int(window.winId())
         dwmapi = ctypes.windll.dwmapi
-        # DWMWA_WINDOW_CORNER_PREFERENCE = 33, DWMWCP_ROUND = 2
         corner = ctypes.c_int(2)
         dwmapi.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(corner), ctypes.sizeof(corner))
-        # DWMWA_SYSTEMBACKDROP_TYPE = 38, DWMSBT_MAINWINDOW = 2 (Mica)
         backdrop = ctypes.c_int(2)
         dwmapi.DwmSetWindowAttribute(hwnd, 38, ctypes.byref(backdrop), ctypes.sizeof(backdrop))
     except Exception:
