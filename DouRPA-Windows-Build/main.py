@@ -8,7 +8,7 @@ from PySide6.QtGui import QFont, QIcon
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from app.main_window_v215 import MainWindow
+from app.main_window_v216 import MainWindow
 from app.theme import APP_STYLESHEET
 
 
@@ -47,15 +47,25 @@ def bootstrap_user_files() -> Path:
 
 
 def enable_windows_backdrop(window):
+    """Best-effort Windows backdrop. Unsupported systems silently fall back."""
     if sys.platform != "win32":
         return
     try:
         hwnd = int(window.winId())
         dwmapi = ctypes.windll.dwmapi
+
         corner = ctypes.c_int(2)
-        dwmapi.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(corner), ctypes.sizeof(corner))
+        dwmapi.DwmSetWindowAttribute(
+            hwnd, 33, ctypes.byref(corner), ctypes.sizeof(corner)
+        )
+
+        # Keep the stable Mica call from the existing application.
+        # The liquid-glass appearance itself is implemented in Qt, so this remains
+        # a best-effort enhancement and does not affect Windows 10 compatibility.
         backdrop = ctypes.c_int(2)
-        dwmapi.DwmSetWindowAttribute(hwnd, 38, ctypes.byref(backdrop), ctypes.sizeof(backdrop))
+        dwmapi.DwmSetWindowAttribute(
+            hwnd, 38, ctypes.byref(backdrop), ctypes.sizeof(backdrop)
+        )
     except Exception:
         pass
 
@@ -83,7 +93,11 @@ def main() -> int:
         enable_windows_backdrop(window)
         return app.exec()
     except Exception as exc:
-        QMessageBox.critical(None, "DouRPA 启动失败", f"软件启动时发生异常：\n\n{exc}")
+        QMessageBox.critical(
+            None,
+            "DouRPA 启动失败",
+            f"软件启动时发生异常：\n\n{exc}",
+        )
         raise
 
 
