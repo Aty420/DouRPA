@@ -1,5 +1,5 @@
 #define MyAppName "DouRPA Pro"
-#define MyAppVersion "2.3.6"
+#define MyAppVersion "2.3.7"
 #define MyAppPublisher "DouRPA"
 #define MyAppExeName "DouRPA.exe"
 
