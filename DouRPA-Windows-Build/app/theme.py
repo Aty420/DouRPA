@@ -473,4 +473,170 @@ QToolTip {
 QMessageBox {
     background: #F2F5FF;
 }
+
+/* ===== V2.1.7 reference-image layout ===== */
+QFrame#RefMetricCard {
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:1,
+        stop:0 rgba(255,255,255,224),
+        stop:0.55 rgba(250,252,255,190),
+        stop:1 rgba(242,246,255,158)
+    );
+    border: 1px solid rgba(255,255,255,240);
+    border-radius: 20px;
+}
+
+QLabel#RefMetricIcon {
+    border-radius: 18px;
+    color: #FFFFFF;
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #58B9FF,stop:1 #4C70FF);
+}
+QLabel#RefMetricIcon[accent="purple"] {
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #8D78FF,stop:1 #693BEE);
+}
+QLabel#RefMetricIcon[accent="green"] {
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #45DDAA,stop:1 #1AB878);
+}
+QLabel#RefMetricIcon[accent="red"] {
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #FF7899,stop:1 #EE456F);
+}
+
+QLabel#MiniBars {
+    color: #79AAFF;
+    font-size: 13px;
+    font-weight: 700;
+}
+QLabel#MiniBars[accent="purple"] { color: #967CFF; }
+QLabel#MiniBars[accent="green"] { color: #49C99B; }
+QLabel#MiniBars[accent="red"] { color: #FF809A; }
+
+QFrame#FlowStep {
+    background: rgba(255,255,255,94);
+    border: 1px solid rgba(255,255,255,132);
+    border-radius: 14px;
+}
+QFrame#FlowStep[active="true"] {
+    background: rgba(255,255,255,182);
+    border: 1px solid rgba(119,145,255,128);
+}
+QLabel#FlowStepNumber {
+    color: #7A86A1;
+    background: rgba(193,202,226,145);
+    border-radius: 14px;
+    font-weight: 700;
+}
+QLabel#FlowStepNumber[active="true"] {
+    color: #FFFFFF;
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #467FFF,stop:1 #735EFF);
+}
+QLabel#FlowStepText {
+    color: #7B859A;
+    font-size: 10px;
+    font-weight: 600;
+}
+QLabel#FlowStepText[active="true"] {
+    color: #273452;
+}
+QLabel#FlowArrow {
+    color: #A5AEC2;
+    font-size: 18px;
+}
+
+QPushButton#DropZoneButton {
+    background: rgba(246,249,255,125);
+    color: #56627D;
+    border: 1px dashed rgba(130,151,213,145);
+    border-radius: 14px;
+    padding: 14px;
+    font-size: 11px;
+    text-align: center;
+}
+QPushButton#DropZoneButton:hover {
+    background: rgba(255,255,255,190);
+    color: #354565;
+    border: 1px dashed rgba(91,118,225,205);
+}
+
+QPushButton#DashboardRunButton {
+    min-height: 42px;
+    border-radius: 14px;
+}
+
+QFrame#RunOrb {
+    background: qradialgradient(
+        cx:0.5,cy:0.5,radius:0.55,
+        stop:0 rgba(255,255,255,240),
+        stop:0.45 rgba(167,220,255,190),
+        stop:0.72 rgba(112,154,255,108),
+        stop:1 rgba(123,95,255,25)
+    );
+    border: 1px solid rgba(255,255,255,240);
+    border-radius: 52px;
+}
+
+QLabel#RunStatusBig {
+    color: #16A56E;
+    font-size: 18px;
+    font-weight: 700;
+}
+QLabel#RunDescription {
+    color: #7A849B;
+    font-size: 10px;
+}
+
+QPushButton#TextLinkButton, QPushButton#TableLinkButton {
+    background: transparent;
+    border: 0;
+    color: #526DFF;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 4px 6px;
+}
+QPushButton#TextLinkButton:hover, QPushButton#TableLinkButton:hover {
+    color: #8B5DFF;
+    text-decoration: underline;
+}
+
+QComboBox#QuickStoreCombo {
+    min-height: 38px;
+    min-width: 150px;
+    background: rgba(255,255,255,164);
+    border: 1px solid rgba(255,255,255,220);
+    border-radius: 13px;
+    padding-left: 11px;
+    color: #33415E;
+}
+
+QPushButton#TopRunButton {
+    min-height: 40px;
+    min-width: 148px;
+    border-radius: 15px;
+}
+
+QFrame#SidebarLiquidBlob {
+    min-height: 210px;
+    background: qradialgradient(
+        cx:0.15,cy:0.12,radius:1.1,
+        stop:0 rgba(171,229,255,92),
+        stop:0.35 rgba(128,147,255,72),
+        stop:0.72 rgba(124,98,255,48),
+        stop:1 rgba(255,255,255,10)
+    );
+    border: 1px solid rgba(255,255,255,54);
+    border-radius: 28px;
+}
+QLabel#SidebarBlobTitle {
+    color: rgba(255,255,255,210);
+    font-size: 14px;
+    font-weight: 600;
+}
+QLabel#SidebarBlobSub {
+    color: rgba(235,241,255,170);
+    font-size: 13px;
+}
+QLabel#SidebarVersion {
+    color: rgba(224,233,255,135);
+    font-size: 9px;
+}
+
 """
