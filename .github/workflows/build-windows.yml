@@ -30,7 +30,7 @@ jobs:
         working-directory: DouRPA-Windows-Build
         run: |
           python -m compileall -q main.py app
-          python -c "from app.rpa.publisher import DouDianSimilarPublisher; from app.main_window_v230 import MainWindow; from app.collector_worker import ProductCollectorWorker; from app.collectors.douyin_mumu import MuMuAdbController; from app.collectors.taobao import TaobaoCollector; print('DouRPA V2.3 import validation OK')"
+          python -c "from app.rpa.publisher import DouDianSimilarPublisher; from app.main_window_v240 import MainWindow; from app.url_downloader import ProductLinkWorker, resolve_product_metadata; print('DouRPA V2.6 URL parser import validation OK')"
 
       - name: Build EXE
         working-directory: DouRPA-Windows-Build
