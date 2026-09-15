@@ -151,34 +151,208 @@ class MuMuAdbController:
 
     @staticmethod
     def _find_adb() -> str:
-        env = os.environ.get("MUMU_ADB_PATH", "").strip()
-        candidates = []
-        if env:
-            candidates.append(env)
-        which = shutil.which("adb")
-        if which:
-            candidates.append(which)
-        program_files = [
-            os.environ.get("ProgramFiles", r"C:\Program Files"),
-            os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
-            os.environ.get("LOCALAPPDATA", ""),
-        ]
+        """Locate MuMu's bundled adb.exe without assuming it is installed on C:.
+
+        Search order:
+        1) explicit MUMU_ADB_PATH
+        2) adb on PATH
+        3) common MuMu folders on C:-H:
+        4) installation folders inferred from running MuMu/Nemu processes
+        5) MuMu uninstall registry entries
+        """
+        candidates: list[str] = []
+
+        def add(path):
+            if not path:
+                return
+            try:
+                value = str(Path(str(path).strip().strip('"')).expanduser())
+            except Exception:
+                return
+            if value and value not in candidates:
+                candidates.append(value)
+
+        # 1. User override.
+        add(os.environ.get("MUMU_ADB_PATH", "").strip())
+
+        # 2. System PATH.
+        add(shutil.which("adb"))
+
+        # 3. Common install locations, including non-C drives and Global builds.
         rels = [
+            r"Program Files\Netease\MuMuPlayer-12.0\shell\adb.exe",
+            r"Program Files\NetEase\MuMuPlayer-12.0\shell\adb.exe",
+            r"Program Files\Netease\MuMuPlayerGlobal-12.0\shell\adb.exe",
+            r"Program Files\NetEase\MuMuPlayerGlobal-12.0\shell\adb.exe",
+            r"Program Files (x86)\Netease\MuMuPlayer-12.0\shell\adb.exe",
+            r"Program Files (x86)\NetEase\MuMuPlayer-12.0\shell\adb.exe",
+            r"Program Files (x86)\Netease\MuMuPlayerGlobal-12.0\shell\adb.exe",
+            r"Program Files (x86)\NetEase\MuMuPlayerGlobal-12.0\shell\adb.exe",
             r"Netease\MuMuPlayer-12.0\shell\adb.exe",
             r"NetEase\MuMuPlayer-12.0\shell\adb.exe",
-            r"Netease\MuMuPlayer-12.0\vms\myandrovm_vbox86\adb.exe",
             r"MuMuPlayer-12.0\shell\adb.exe",
+            r"MuMu\MuMuPlayer-12.0\shell\adb.exe",
         ]
-        for base in program_files:
-            if not base:
+        for drive in "CDEFGH":
+            root = Path(f"{drive}:\\")
+            if not root.exists():
                 continue
             for rel in rels:
-                candidates.append(str(Path(base) / rel))
+                add(root / rel)
+
+        for base in (
+            os.environ.get("ProgramFiles", ""),
+            os.environ.get("ProgramFiles(x86)", ""),
+            os.environ.get("LOCALAPPDATA", ""),
+        ):
+            if base:
+                for rel in (
+                    r"Netease\MuMuPlayer-12.0\shell\adb.exe",
+                    r"NetEase\MuMuPlayer-12.0\shell\adb.exe",
+                    r"Netease\MuMuPlayerGlobal-12.0\shell\adb.exe",
+                    r"NetEase\MuMuPlayerGlobal-12.0\shell\adb.exe",
+                    r"MuMuPlayer-12.0\shell\adb.exe",
+                ):
+                    add(Path(base) / rel)
+
+        # 4. Infer install folder from currently running MuMu/Nemu processes.
+        #    This is the most reliable path for custom D:/E:/... installations.
+        process_dirs: list[Path] = []
+        if os.name == "nt":
+            try:
+                ps = (
+                    "$ErrorActionPreference='SilentlyContinue';"
+                    "Get-CimInstance Win32_Process | "
+                    "Where-Object { $_.Name -match 'MuMu|Nemu|MuMuVMMS' } | "
+                    "ForEach-Object { $_.ExecutablePath }"
+                )
+                proc = subprocess.run(
+                    ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="ignore",
+                    timeout=8,
+                )
+                for line in (proc.stdout or "").splitlines():
+                    p = Path(line.strip().strip('"'))
+                    if p.exists():
+                        process_dirs.append(p.parent)
+            except Exception:
+                pass
+
+        def add_nearby_adb(start: Path):
+            """Search only near a MuMu install path, never an entire disk."""
+            seen = set()
+            roots = []
+            cur = start
+            for _ in range(5):
+                if cur and cur not in seen and cur.exists():
+                    roots.append(cur)
+                    seen.add(cur)
+                parent = cur.parent if cur else None
+                if not parent or parent == cur:
+                    break
+                cur = parent
+
+            direct_relatives = (
+                r"adb.exe",
+                r"shell\adb.exe",
+                r"bin\adb.exe",
+                r"tools\adb.exe",
+                r"vms\myandrovm_vbox86\adb.exe",
+            )
+            for root in roots:
+                for rel in direct_relatives:
+                    add(root / rel)
+
+            # Limited recursive scan under the two closest folders.
+            # MuMu layouts differ by version, so this catches custom/newer layouts.
+            for root in roots[:2]:
+                scanned = 0
+                try:
+                    for current, dirs, files in os.walk(root):
+                        scanned += 1
+                        if scanned > 1800:
+                            break
+                        # Avoid huge irrelevant trees.
+                        dirs[:] = [
+                            d for d in dirs
+                            if d.lower() not in {
+                                "cache", "logs", "log", "temp", "tmp",
+                                "screenshots", "download", "downloads"
+                            }
+                        ]
+                        if "adb.exe" in {f.lower() for f in files}:
+                            for f in files:
+                                if f.lower() == "adb.exe":
+                                    add(Path(current) / f)
+                                    return
+                except Exception:
+                    pass
+
+        for pdir in process_dirs:
+            add_nearby_adb(pdir)
+
+        # 5. Infer install folder from Windows uninstall registry.
+        if os.name == "nt":
+            try:
+                import winreg
+                registry_roots = [
+                    (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+                    (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+                    (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+                ]
+                for hive, key_path in registry_roots:
+                    try:
+                        with winreg.OpenKey(hive, key_path) as root_key:
+                            count = winreg.QueryInfoKey(root_key)[0]
+                            for i in range(count):
+                                try:
+                                    sub_name = winreg.EnumKey(root_key, i)
+                                    with winreg.OpenKey(root_key, sub_name) as sub:
+                                        try:
+                                            display, _ = winreg.QueryValueEx(sub, "DisplayName")
+                                        except OSError:
+                                            display = ""
+                                        if "mumu" not in str(display).lower():
+                                            continue
+                                        install = ""
+                                        try:
+                                            install, _ = winreg.QueryValueEx(sub, "InstallLocation")
+                                        except OSError:
+                                            pass
+                                        if install:
+                                            add_nearby_adb(Path(str(install)))
+                                        try:
+                                            icon, _ = winreg.QueryValueEx(sub, "DisplayIcon")
+                                            if icon:
+                                                icon_path = Path(str(icon).split(",")[0].strip().strip('"'))
+                                                add_nearby_adb(icon_path.parent)
+                                        except OSError:
+                                            pass
+                                except Exception:
+                                    continue
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+        # Resolve in discovery order.
         for candidate in candidates:
-            if candidate and Path(candidate).exists():
-                return candidate
+            try:
+                p = Path(candidate)
+                if p.is_file() and p.name.lower() == "adb.exe":
+                    return str(p.resolve())
+            except Exception:
+                continue
+
         raise RuntimeError(
-            "未找到 MuMu 的 adb.exe。请确认 MuMu 模拟器已安装；也可以设置环境变量 MUMU_ADB_PATH 指向 adb.exe。"
+            "未找到 MuMu 的 adb.exe。软件已自动检查系统 PATH、C:-H: 常见安装目录、"
+            "正在运行的 MuMu 进程路径和 Windows 安装信息。\\n\\n"
+            "请先保持 MuMu 模拟器处于打开状态后再点“重新连接 MuMu”。"
+            "如果仍失败，可在任务管理器中右键 MuMu → 打开文件所在的位置，"
+            "找到 adb.exe 后把其完整路径发给我。"
         )
 
     def _run(self, args, timeout=15, check=False) -> str:
