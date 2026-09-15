@@ -789,4 +789,130 @@ QPushButton#ReferenceStopPublishButton:pressed {
     background: #CF2944;
 }
 
+
+/* ===============================
+   V2.2.0 sidebar/topbar polish
+   =============================== */
+QLabel#SidebarFooterPlain {
+    color: rgba(226,235,255,125);
+    background: transparent;
+    border: 0;
+    font-size: 9px;
+    padding: 2px 4px;
+}
+
+/* The three top-right blocks have exactly identical outer dimensions. */
+QFrame#TopEqualBlock,
+QComboBox#TopEqualCombo,
+QFrame#TopRunSplit {
+    min-width: 172px;
+    max-width: 172px;
+    min-height: 48px;
+    max-height: 48px;
+    border-radius: 15px;
+}
+
+QFrame#TopEqualBlock {
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:1,
+        stop:0 rgba(255,255,255,192),
+        stop:1 rgba(240,244,255,154)
+    );
+    border: 1px solid rgba(255,255,255,226);
+    border-bottom: 1px solid rgba(193,204,230,150);
+}
+
+QComboBox#TopEqualCombo {
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:1,
+        stop:0 rgba(255,255,255,192),
+        stop:1 rgba(240,244,255,154)
+    );
+    color: #35425F;
+    border: 1px solid rgba(255,255,255,226);
+    border-bottom: 1px solid rgba(193,204,230,150);
+    padding-left: 13px;
+    padding-right: 28px;
+    font-size: 10px;
+    font-weight: 600;
+}
+QComboBox#TopEqualCombo:hover {
+    background: rgba(255,255,255,218);
+    border-color: rgba(166,183,229,190);
+}
+QComboBox#TopEqualCombo::drop-down {
+    width: 28px;
+    border: 0;
+}
+
+/* Parent is transparent. Actual clickable children own their backgrounds. */
+QFrame#TopRunSplit {
+    background: transparent;
+    border: 0;
+}
+
+QPushButton#TopRunMain {
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:0,
+        stop:0 #4297FF,
+        stop:0.45 #596FFF,
+        stop:0.77 #7B5AFF,
+        stop:1 #A64EF1
+    );
+    color: #FFFFFF;
+    border: 1px solid rgba(255,255,255,168);
+    border-right: 1px solid rgba(255,255,255,72);
+    border-top-left-radius: 15px;
+    border-bottom-left-radius: 15px;
+    border-top-right-radius: 0px;
+    border-bottom-right-radius: 0px;
+    padding: 0 10px;
+    font-size: 10px;
+    font-weight: 700;
+}
+QPushButton#TopRunMain:hover {
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:0,
+        stop:0 #55A2FF,
+        stop:0.45 #687CFF,
+        stop:0.77 #8A68FF,
+        stop:1 #B75AF6
+    );
+}
+QPushButton#TopRunMain:pressed {
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:0,
+        stop:0 #2F76DF,
+        stop:0.45 #4959D8,
+        stop:0.77 #6848D5,
+        stop:1 #8D36D1
+    );
+    border-top: 2px solid rgba(50,55,130,100);
+    padding-top: 1px;
+}
+
+QToolButton#TopRunArrow {
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:0,
+        stop:0 #9E54F0,
+        stop:1 #B94AF3
+    );
+    color: #FFFFFF;
+    border: 1px solid rgba(255,255,255,168);
+    border-left: 0;
+    border-top-right-radius: 15px;
+    border-bottom-right-radius: 15px;
+    border-top-left-radius: 0px;
+    border-bottom-left-radius: 0px;
+    font-size: 12px;
+    font-weight: 700;
+}
+QToolButton#TopRunArrow:hover {
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #AE64F5,stop:1 #C85AF8);
+}
+QToolButton#TopRunArrow:pressed {
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #8139C9,stop:1 #9A34CF);
+}
+QToolButton#TopRunArrow::menu-indicator { image: none; }
+
 """
