@@ -915,4 +915,36 @@ QToolButton#TopRunArrow:pressed {
 }
 QToolButton#TopRunArrow::menu-indicator { image: none; }
 
+
+/* V2.3.0 Product Collector / URL Downloader */
+QLabel#ToolStatusPill {
+    background: rgba(238,244,255,180);
+    color: #516078;
+    border: 1px solid rgba(189,205,236,170);
+    border-radius: 11px;
+    padding: 7px 11px;
+    font-size: 10px;
+    font-weight: 600;
+}
+QLabel#ToolStatusPill[state="ok"] {
+    background: rgba(232,251,243,205);
+    color: #087A4B;
+    border-color: rgba(135,220,178,180);
+}
+QLabel#ToolStatusPill[state="bad"] {
+    background: rgba(255,239,241,205);
+    color: #C53A59;
+    border-color: rgba(244,174,191,180);
+}
+QPlainTextEdit#UrlInputBox {
+    background: rgba(255,255,255,150);
+    color: #34415C;
+    border: 1px solid rgba(255,255,255,220);
+    border-bottom: 1px solid rgba(190,202,229,155);
+    border-radius: 14px;
+    padding: 12px;
+    font-family: "Microsoft YaHei UI", "Segoe UI";
+    font-size: 10px;
+}
+
 """
