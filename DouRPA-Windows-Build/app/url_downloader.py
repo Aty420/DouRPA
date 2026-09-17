@@ -18,6 +18,12 @@ from PySide6.QtCore import QThread, Signal
 
 
 _INVALID_FILENAME = re.compile(r'[\\/:*?"<>|\x00-\x1f]+')
+_CLOSE_ERROR_HINTS = (
+    "target page, context or browser has been closed",
+    "page has been closed",
+    "browser has been closed",
+    "context has been closed",
+)
 
 
 def sanitize_filename(name: str, fallback: str = "image") -> str:
@@ -44,6 +50,83 @@ def _human(text: str, lo=3, hi=220) -> bool:
     return True
 
 
+def _is_closed_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return any(x in msg for x in _CLOSE_ERROR_HINTS)
+
+
+def _profile_dir() -> Path:
+    base = os.environ.get("LOCALAPPDATA")
+    root = Path(base) / "DouRPA" if base else Path.home() / "AppData" / "Local" / "DouRPA"
+    path = root / "data" / "url_parser_profile"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _safe_page_url(page, fallback="") -> str:
+    try:
+        if page and not page.is_closed():
+            return page.url
+    except Exception:
+        pass
+    return fallback
+
+
+def _safe_page_title(page) -> str:
+    try:
+        if page and not page.is_closed():
+            return _clean(page.title())
+    except Exception:
+        pass
+    return ""
+
+
+def _live_page(context, preferred=None):
+    try:
+        if preferred is not None and not preferred.is_closed():
+            return preferred
+    except Exception:
+        pass
+
+    try:
+        for page in reversed(context.pages):
+            try:
+                if not page.is_closed():
+                    return page
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return None
+
+
+def _safe_close_page(page):
+    try:
+        if page is not None and not page.is_closed():
+            page.close()
+    except Exception:
+        pass
+
+
+def _resolve_http_redirect(url: str) -> str:
+    """Resolve short links before browser navigation to reduce app-launch/auto-close pages."""
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 Chrome/138.0 Safari/537.36"
+                ),
+                "Accept-Language": "zh-CN,zh;q=0.9",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.geturl() or url
+    except Exception:
+        return url
+
+
 def _walk(obj, path=()):
     if isinstance(obj, dict):
         for key, value in obj.items():
@@ -62,14 +145,15 @@ def _first_url(value) -> str:
         value = _clean(value)
         if value.startswith("//"):
             value = "https:" + value
-        return value if value.startswith(("http://", "https://")) else ""
-    if isinstance(value, list):
+        if value.startswith(("http://", "https://")):
+            return value
+    elif isinstance(value, list):
         for item in value:
             found = _first_url(item)
             if found:
                 return found
-    if isinstance(value, dict):
-        for key in ("url", "src", "url_list", "urls", "image", "imageUrl"):
+    elif isinstance(value, dict):
+        for key in ("url", "src", "url_list", "urls", "image", "imageUrl", "uri"):
             if key in value:
                 found = _first_url(value[key])
                 if found:
@@ -87,28 +171,34 @@ _TITLE_KEYS = {
 _IMAGE_KEYS = {
     "mainimage", "mainpic", "imageurl", "picurl", "coverurl",
     "originimg", "main_image", "main_pic", "image_url",
-    "pic_url", "cover_url", "origin_img", "images", "url_list",
+    "pic_url", "cover_url", "origin_img", "images",
+    "url_list", "image_list", "img_list",
 }
 
-_SKU_KEYS = {
+_SKU_DIRECT_KEYS = {
     "skuname", "skutitle", "sku_name", "sku_title",
-    "specdesc", "spec_desc", "specvaluename", "spec_value_name",
+    "skudesc", "sku_desc",
+    "specdesc", "spec_desc",
+    "specvaluename", "spec_value_name",
+    "specvalue", "spec_value",
+    "specname", "spec_name",
     "combinationtext", "combination_text",
     "propertyvaluename", "property_value_name",
     "salepropertyname", "sale_property_name",
 }
 
+_PRODUCT_CONTEXT = ("product", "goods", "item", "commodity", "商品")
 _SKU_CONTEXT = ("sku", "spec", "规格", "saleprop", "sale_prop", "product_sku")
 
 
-def _from_json(payload) -> dict:
-    titles = []
-    images = []
+def _metadata_from_json(payload) -> dict:
+    title_candidates = []
+    image_candidates = []
     skus = []
 
     title_norm = {x.replace("_", "") for x in _TITLE_KEYS}
     image_norm = {x.replace("_", "") for x in _IMAGE_KEYS}
-    sku_norm = {x.replace("_", "") for x in _SKU_KEYS}
+    sku_norm = {x.replace("_", "") for x in _SKU_DIRECT_KEYS}
 
     for path, value in _walk(payload):
         if not path:
@@ -121,35 +211,59 @@ def _from_json(payload) -> dict:
         if isinstance(value, str):
             text = _clean(value)
 
+            # Strong product-title keys.
             if norm in title_norm and _human(text, 5, 220):
-                score = 20
-                if any(x in joined for x in ("product", "goods", "item", "商品")):
-                    score += 20
+                score = 50
+                if any(x in joined for x in _PRODUCT_CONTEXT):
+                    score += 40
                 if any(x in text for x in ("抽", "提", "包", "箱", "卷", "片", "装", "纸", "巾")):
-                    score += 10
-                titles.append((score, len(text), text))
+                    score += 15
+                title_candidates.append((score, len(text), text))
 
+            # Generic title/name inside product context.
+            elif key in {"title", "name"} and any(x in joined for x in _PRODUCT_CONTEXT):
+                if _human(text, 5, 220):
+                    score = 35
+                    if any(x in text for x in ("抽", "提", "包", "箱", "卷", "片", "装", "纸", "巾")):
+                        score += 15
+                    title_candidates.append((score, len(text), text))
+
+            # Direct SKU fields.
             if norm in sku_norm and _human(text, 3, 180):
                 if text not in skus:
                     skus.append(text)
+
+            # Generic SKU child fields inside an sku/spec subtree.
             elif any(h in joined for h in _SKU_CONTEXT):
-                if key in {"name", "title", "desc", "text", "label", "value"} and _human(text, 3, 180):
-                    if text not in skus:
+                if key in {"name", "title", "desc", "text", "label", "value", "display_name"}:
+                    if _human(text, 3, 180) and text not in skus:
                         skus.append(text)
 
-        if norm in image_norm:
+        # Image fields.
+        if norm in image_norm or (
+            any(x in joined for x in _PRODUCT_CONTEXT)
+            and key in {"image", "images", "pic", "pics", "cover", "url_list"}
+        ):
             found = _first_url(value)
-            if found and found not in images:
-                images.append(found)
+            if found:
+                score = 50 if any(x in joined for x in _PRODUCT_CONTEXT) else 20
+                if any(bad in found.lower() for bad in ("avatar", "logo", "icon", "qrcode", "emoji")):
+                    score -= 50
+                image_candidates.append((score, found))
 
     title = ""
-    if titles:
-        titles.sort(reverse=True)
-        title = titles[0][2]
+    if title_candidates:
+        title_candidates.sort(reverse=True)
+        title = title_candidates[0][2]
+
+    image_url = ""
+    if image_candidates:
+        image_candidates.sort(key=lambda x: x[0], reverse=True)
+        image_url = image_candidates[0][1]
 
     return {
         "title": title,
-        "image_url": images[0] if images else "",
+        "image_url": image_url,
         "sku_titles": skus[:100],
     }
 
@@ -160,14 +274,17 @@ def _merge(dst: dict, src: dict):
     if not dst.get("image_url") and src.get("image_url"):
         dst["image_url"] = src["image_url"]
 
-    current = dst.setdefault("sku_titles", [])
-    for value in src.get("sku_titles") or []:
-        value = _clean(value)
-        if _human(value, 3, 180) and value not in current:
-            current.append(value)
+    existing = dst.setdefault("sku_titles", [])
+    for sku in src.get("sku_titles") or []:
+        sku = _clean(sku)
+        if _human(sku, 3, 180) and sku not in existing:
+            existing.append(sku)
 
 
 def _dom_title(page) -> str:
+    if page is None:
+        return ""
+
     try:
         meta = page.locator('meta[property="og:title"]').get_attribute("content")
         if _human(meta, 5, 220):
@@ -175,40 +292,53 @@ def _dom_title(page) -> str:
     except Exception:
         pass
 
-    for selector in ("h1", "[class*='title']", "[class*='Title']"):
+    for selector in (
+        "h1",
+        "[class*='product-title']",
+        "[class*='goods-title']",
+        "[class*='item-title']",
+        "[class*='title']",
+        "[class*='Title']",
+    ):
         try:
             loc = page.locator(selector)
             for i in range(min(loc.count(), 10)):
-                value = _clean(loc.nth(i).inner_text(timeout=1000))
+                value = _clean(loc.nth(i).inner_text(timeout=1200))
                 if _human(value, 5, 220):
                     return value
         except Exception:
             pass
 
-    try:
-        value = _clean(page.title())
-        value = re.sub(r"[-_|]\s*(抖音|抖音商城|淘宝|天猫).*$", "", value).strip()
-        if _human(value, 5, 220) and value not in {"抖音", "淘宝", "天猫"}:
-            return value
-    except Exception:
-        pass
+    value = _safe_page_title(page)
+    value = re.sub(r"[-_|]\s*(抖音|抖音商城|淘宝|天猫).*$", "", value).strip()
+    if _human(value, 5, 220) and value not in {"抖音", "淘宝", "天猫"}:
+        return value
 
     return ""
 
 
 def _largest_image(page) -> str:
+    if page is None:
+        return ""
     try:
         return page.evaluate(
             """() => {
-              const bad = /(avatar|logo|icon|emoji|qrcode|qr-code)/i;
-              const rows = [...document.images].map(img => ({
+              const bad = /(avatar|logo|icon|emoji|qrcode|qr-code|banner)/i;
+              const rows = [...document.images].map((img, idx) => ({
                 src: img.currentSrc || img.src || '',
                 w: img.naturalWidth || 0,
                 h: img.naturalHeight || 0,
-                area: (img.naturalWidth || 0) * (img.naturalHeight || 0)
-              })).filter(x => /^https?:/i.test(x.src)
-                    && x.w >= 250 && x.h >= 250 && !bad.test(x.src))
-                .sort((a,b) => b.area - a.area);
+                area: (img.naturalWidth || 0) * (img.naturalHeight || 0),
+                idx
+              })).filter(x =>
+                    /^https?:/i.test(x.src) &&
+                    x.w >= 250 && x.h >= 250 &&
+                    !bad.test(x.src))
+                .sort((a,b) => {
+                    if (a.idx < 8 && b.idx >= 8) return -1;
+                    if (b.idx < 8 && a.idx >= 8) return 1;
+                    return b.area - a.area;
+                });
               return rows.length ? rows[0].src : '';
             }"""
         ) or ""
@@ -216,15 +346,17 @@ def _largest_image(page) -> str:
         return ""
 
 
-def _open_specs(page):
+def _open_specs(page) -> bool:
+    if page is None:
+        return False
     for label in ("包装规格", "选择规格", "选规格", "规格"):
         try:
             loc = page.get_by_text(label, exact=False)
-            for i in range(min(loc.count(), 6)):
+            for i in range(min(loc.count(), 8)):
                 item = loc.nth(i)
                 if item.is_visible():
                     item.click(timeout=2500)
-                    page.wait_for_timeout(900)
+                    page.wait_for_timeout(800)
                     return True
         except Exception:
             continue
@@ -257,20 +389,24 @@ def _visible_skus(text: str) -> list[str]:
     return result[:80]
 
 
-def _profile_dir() -> Path:
-    base = os.environ.get("LOCALAPPDATA")
-    root = Path(base) / "DouRPA" if base else Path.home() / "AppData" / "Local" / "DouRPA"
-    path = root / "data" / "url_parser_profile"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+def _safe_body_text(page) -> str:
+    try:
+        if page is not None and not page.is_closed():
+            return page.locator("body").inner_text(timeout=4000)
+    except Exception:
+        pass
+    return ""
 
 
 def _save_debug(debug_dir: Path, index: int, info: dict):
-    debug_dir.mkdir(parents=True, exist_ok=True)
-    (debug_dir / f"{index:03d}.json").write_text(
-        json.dumps(info, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    try:
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        (debug_dir / f"{index:03d}.json").write_text(
+            json.dumps(info, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
 
 
 def _save_jpg_from_url(url: str, target: Path, retries=2):
@@ -306,18 +442,28 @@ def _save_jpg_from_url(url: str, target: Path, retries=2):
     raise RuntimeError(f"JPG下载失败：{last}")
 
 
-def resolve_page(context, url: str, index: int, debug_dir: Path) -> dict:
+def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
+    """Robust product-link resolver.
+
+    Key fixes:
+    - pre-resolve short URL
+    - listen on BrowserContext, so popup/replacement pages are captured too
+    - recover when the original page closes itself
+    - never let page.close()/page.title() mask a successfully captured result
+    """
     result = {
         "title": "",
         "image_url": "",
         "sku_titles": [],
-        "final_url": url,
+        "final_url": source_url,
     }
+
     responses = []
     payloads = []
     body_text = ""
 
-    page = context.new_page()
+    resolved_url = _resolve_http_redirect(source_url)
+    page = None
 
     def on_response(response):
         try:
@@ -327,16 +473,18 @@ def resolve_page(context, url: str, index: int, debug_dir: Path) -> dict:
                 "json" in ctype
                 or any(x in rurl.lower() for x in (
                     "product", "goods", "item", "sku", "spec",
-                    "mall", "ecom", "detail", "shop"
+                    "mall", "ecom", "detail", "shop", "commodity"
                 ))
             )
             if not interesting:
                 return
+
             responses.append({
                 "url": rurl,
                 "status": response.status,
                 "content_type": ctype,
             })
+
             if "json" in ctype:
                 try:
                     payloads.append(response.json())
@@ -345,59 +493,102 @@ def resolve_page(context, url: str, index: int, debug_dir: Path) -> dict:
         except Exception:
             pass
 
-    page.on("response", on_response)
+    try:
+        context.on("response", on_response)
+    except Exception:
+        pass
 
     try:
-        page.goto(url, wait_until="domcontentloaded", timeout=45000)
-        page.wait_for_timeout(4500)
-        result["final_url"] = page.url
+        page = context.new_page()
 
         try:
-            page.wait_for_load_state("networkidle", timeout=8000)
+            page.goto(resolved_url, wait_until="domcontentloaded", timeout=45000)
+        except Exception as exc:
+            if not _is_closed_error(exc):
+                raise
+
+        # Short-link / app-launch pages may close the original tab and open another.
+        time.sleep(1.0)
+        page = _live_page(context, page)
+        if page is None:
+            # Re-open resolved URL if site closed all tabs.
+            page = context.new_page()
+            page.goto(resolved_url, wait_until="domcontentloaded", timeout=45000)
+
+        try:
+            page.wait_for_timeout(3500)
+        except Exception as exc:
+            if _is_closed_error(exc):
+                page = _live_page(context, page)
+
+        if page is None:
+            raise RuntimeError("商品页面已关闭，且未检测到替代页面")
+
+        result["final_url"] = _safe_page_url(page, resolved_url)
+
+        try:
+            page.wait_for_load_state("networkidle", timeout=7000)
         except Exception:
             pass
 
-        for payload in payloads:
-            _merge(result, _from_json(payload))
+        # Parse all JSON seen during page load / redirects / popup navigation.
+        for payload in list(payloads):
+            _merge(result, _metadata_from_json(payload))
 
         if not result["title"]:
             result["title"] = _dom_title(page)
         if not result["image_url"]:
             result["image_url"] = _largest_image(page)
 
+        # Trigger SKU/spec data.
         before = len(payloads)
         _open_specs(page)
-        page.wait_for_timeout(1200)
+
+        page = _live_page(context, page)
+        if page is not None:
+            try:
+                page.wait_for_timeout(1000)
+            except Exception:
+                pass
 
         for payload in payloads[before:]:
-            _merge(result, _from_json(payload))
+            _merge(result, _metadata_from_json(payload))
 
-        try:
-            body_text = page.locator("body").inner_text(timeout=4000)
-            for sku in _visible_skus(body_text):
-                if sku not in result["sku_titles"]:
-                    result["sku_titles"].append(sku)
-        except Exception:
-            pass
+        body_text = _safe_body_text(page)
+        for sku in _visible_skus(body_text):
+            if sku not in result["sku_titles"]:
+                result["sku_titles"].append(sku)
 
         if not result["title"]:
             result["title"] = _dom_title(page)
         if not result["image_url"]:
             result["image_url"] = _largest_image(page)
 
+        # Final JSON pass in case late network responses arrived.
+        for payload in payloads:
+            _merge(result, _metadata_from_json(payload))
+
+    finally:
+        # Diagnostics must never throw if the page has already been closed.
         if not result["title"] or not result["image_url"] or not result["sku_titles"]:
             _save_debug(debug_dir, index, {
-                "source_url": url,
-                "final_url": result["final_url"],
-                "page_title": page.title(),
-                "title_found": bool(result["title"]),
-                "image_found": bool(result["image_url"]),
-                "sku_count": len(result["sku_titles"]),
+                "source_url": source_url,
+                "pre_resolved_url": resolved_url,
+                "final_url": _safe_page_url(page, result.get("final_url", resolved_url)),
+                "page_title": _safe_page_title(page),
+                "title_found": bool(result.get("title")),
+                "image_found": bool(result.get("image_url")),
+                "sku_count": len(result.get("sku_titles") or []),
                 "body_preview": body_text[:6000],
-                "responses": responses[-150:],
+                "responses": responses[-180:],
             })
-    finally:
-        page.close()
+
+        try:
+            context.remove_listener("response", on_response)
+        except Exception:
+            pass
+
+        _safe_close_page(page)
 
     return result
 
@@ -423,7 +614,7 @@ class ProductLinkWorker(QThread):
             for x in urls
         ]
         self.output_parent = Path(output_parent)
-        self.concurrency = 1  # real persistent browser processes URLs sequentially
+        self.concurrency = 1
         self.retries = max(0, int(retries))
         self.stop_event = threading.Event()
 
@@ -471,7 +662,7 @@ class ProductLinkWorker(QThread):
         total = len(self.urls)
 
         self.info.emit(
-            "正在启动真实 Edge。首次出现抖音/淘宝登录页时，请在打开的 Edge 中登录；登录状态会保存。"
+            "正在启动 Edge 商品解析浏览器。解析过程中请不要手动关闭 Edge；首次登录后会自动复用登录状态。"
         )
 
         try:
@@ -527,7 +718,25 @@ class ProductLinkWorker(QThread):
                                 "sku_titles": skus,
                                 "status": "完成" if not status else "；".join(status),
                             }
+
                         except Exception as exc:
+                            # If the user manually closed Edge, stop cleanly instead of hiding
+                            # the real reason behind another page.close() exception.
+                            if _is_closed_error(exc):
+                                msg = "Edge 浏览器被关闭，已停止解析。请重新运行并保持解析浏览器打开。"
+                                errors.append(f"{idx + 1}: {msg}")
+                                row = {
+                                    "source_url": url,
+                                    "title": f"商品_{idx + 1:03d}",
+                                    "image_url": "",
+                                    "sku_titles": [],
+                                    "status": msg,
+                                }
+                                rows.append(row)
+                                self.item_result.emit(idx, row)
+                                self.progress.emit(idx + 1, total)
+                                break
+
                             row = {
                                 "source_url": url,
                                 "title": f"商品_{idx + 1:03d}",
@@ -540,8 +749,13 @@ class ProductLinkWorker(QThread):
                         rows.append(row)
                         self.item_result.emit(idx, row)
                         self.progress.emit(idx + 1, total)
+
                 finally:
-                    context.close()
+                    try:
+                        context.close()
+                    except Exception:
+                        pass
+
         except Exception as exc:
             errors.append(f"Edge启动失败：{exc}")
 
