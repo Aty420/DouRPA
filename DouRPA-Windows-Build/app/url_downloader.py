@@ -662,7 +662,7 @@ class ProductLinkWorker(QThread):
         total = len(self.urls)
 
         self.info.emit(
-            "正在启动 Edge 商品解析浏览器。解析过程中请不要手动关闭 Edge；首次登录后会自动复用登录状态。"
+            "正在后台静默启动 Edge 内核解析商品，不会显示浏览器窗口。已保存的登录状态会继续复用。"
         )
 
         try:
@@ -670,7 +670,7 @@ class ProductLinkWorker(QThread):
                 context = p.chromium.launch_persistent_context(
                     user_data_dir=str(_profile_dir()),
                     channel="msedge",
-                    headless=False,
+                    headless=True,
                     viewport={"width": 1280, "height": 900},
                     args=[
                         "--disable-blink-features=AutomationControlled",

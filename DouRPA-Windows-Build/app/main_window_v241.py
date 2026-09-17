@@ -25,42 +25,120 @@ from app.url_downloader import (
 )
 
 
+_SUPPORTED_PRODUCT_HOSTS = (
+    "v.douyin.com",
+    "www.douyin.com",
+    "douyin.com",
+    "haohuo.jinritemai.com",
+    "jinritemai.com",
+    "m.tb.cn",
+    "item.taobao.com",
+    "taobao.com",
+    "detail.tmall.com",
+    "tmall.com",
+)
+
+_BLOCKED_ASSET_SUFFIXES = (
+    ".zip", ".js", ".css", ".json", ".wasm", ".bin",
+    ".apk", ".exe", ".dll", ".woff", ".woff2", ".ttf",
+)
+
+
+def _is_supported_product_url(url: str) -> bool:
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(str(url or "").strip())
+        host = (parsed.hostname or "").lower()
+        path = (parsed.path or "").lower()
+    except Exception:
+        return False
+
+    if not host:
+        return False
+
+    if path.endswith(_BLOCKED_ASSET_SUFFIXES):
+        return False
+
+    if any(bad in host for bad in (
+        "static", "cdn", "verifycenter", "rc-verify", "byteimg", "snssdk"
+    )):
+        return False
+
+    return any(
+        host == allowed or host.endswith("." + allowed)
+        for allowed in _SUPPORTED_PRODUCT_HOSTS
+    )
+
+
+def _url_score(url: str) -> int:
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower()
+        path = (parsed.path or "").lower()
+    except Exception:
+        return -999
+
+    score = 0
+    if host == "v.douyin.com":
+        score += 100
+    elif host == "m.tb.cn":
+        score += 95
+    elif "item.taobao.com" in host:
+        score += 90
+    elif "detail.tmall.com" in host:
+        score += 90
+    elif "douyin.com" in host:
+        score += 80
+    elif "jinritemai.com" in host:
+        score += 75
+
+    if any(k in path for k in ("/item", "/product", "/detail", "/goods")):
+        score += 20
+
+    if path.endswith(_BLOCKED_ASSET_SUFFIXES):
+        score -= 200
+
+    return score
+
+
 def _extract_records(text: str) -> list[dict]:
-    """Parse raw Douyin/Taobao share text and preserve the product-title hint.
-
-    Example:
-    ... https://v.douyin.com/xxxx/ 【建议拍三件】心相印金装经典...
-    长按复制此条消息...
-
-    Returns:
-    [{"url": "...", "title_hint": "【建议拍三件】心相印金装经典..."}]
-    """
     text = str(text or "")
-    matches = list(re.finditer(r"https?://[^\s，。；;]+", text))
+    all_matches = list(re.finditer(r"https?://[^\s，。；;]+", text))
+
+    candidates = []
+    for match in all_matches:
+        url = match.group(0).rstrip(")】]}>\"'")
+        if _is_supported_product_url(url):
+            candidates.append((match, url))
+
+    if not candidates:
+        return []
+
     result = []
     seen = set()
 
-    for i, match in enumerate(matches):
-        url = match.group(0).rstrip(")】]}>\"'")
-        if not url or url in seen:
+    for i, (match, url) in enumerate(candidates):
+        if url in seen:
             continue
 
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        end = candidates[i + 1][0].start() if i + 1 < len(candidates) else len(text)
         tail = text[match.end():end]
 
-        # The actual copied product title is usually directly after the URL.
-        # Stop before Douyin's instructional sentence or at the next line.
         tail = re.split(
             r"(?:\r?\n|长按复制此条消息|打开抖音搜索|查看商品详情)",
             tail,
             maxsplit=1,
         )[0]
         title_hint = tail.strip(" \t\r\n：:，,。；;")
+        title_hint = re.sub(
+            r"^(?:【抖音商城】|【淘宝】|【天猫】)\s*",
+            "",
+            title_hint,
+        ).strip()
 
-        # Remove platform-only labels if a client happens to repeat them after the URL.
-        title_hint = re.sub(r"^(?:【抖音商城】|【淘宝】|【天猫】)\s*", "", title_hint).strip()
-
-        # Ignore obviously non-title fragments.
         if not title_hint or title_hint.startswith(("http://", "https://")):
             title_hint = ""
 
@@ -70,10 +148,15 @@ def _extract_records(text: str) -> list[dict]:
                 "url": url,
                 "title_hint": title_hint,
                 "raw_text": text[match.start():end].strip(),
+                "_score": _url_score(url),
             }
         )
 
+    result.sort(key=lambda x: x.get("_score", 0), reverse=True)
+    for item in result:
+        item.pop("_score", None)
     return result
+
 
 
 class ShareTextProductLinkWorker(ProductLinkWorker):
@@ -115,8 +198,8 @@ class ShareTextProductLinkWorker(ProductLinkWorker):
         total = len(self.records)
 
         self.info.emit(
-            "正在启动 Edge 商品解析浏览器。分享文案中的商品标题会直接作为标题来源；"
-            "Edge 只负责补充首图URL和SKU。"
+            "正在后台静默解析商品。不会弹出 Edge 窗口；分享文案中的商品标题直接保留，"
+            "后台浏览器仅负责补充首图URL和SKU。"
         )
 
         try:
@@ -124,7 +207,7 @@ class ShareTextProductLinkWorker(ProductLinkWorker):
                 context = p.chromium.launch_persistent_context(
                     user_data_dir=str(_profile_dir()),
                     channel="msedge",
-                    headless=False,
+                    headless=True,
                     viewport={"width": 1280, "height": 900},
                     args=[
                         "--disable-blink-features=AutomationControlled",
@@ -283,16 +366,18 @@ class MainWindow(V240MainWindow):
                     candidates.extend(str(v or "") for v in values)
 
                 for value in candidates:
-                    if re.search(r"https?://[^\s，。；;]+", value):
-                        # Preserve the complete share text instead of stripping it
-                        # down to a bare URL. This keeps the copied product title.
+                    records_in_value = _extract_records(value)
+                    if records_in_value:
+                        # Preserve the complete share text. Arbitrary CDN/static URLs
+                        # are ignored by _extract_records().
                         values_with_links.append(value.strip())
                         break
 
             self.link_input.setPlainText("\n\n".join(values_with_links))
             records = _extract_records(self.link_input.toPlainText())
+            preview = records[0]["url"] if records else "未识别到有效商品链接"
             self.info_label.setText(
-                f"已从 Excel 导入 {len(records)} 个商品链接，分享文案中的标题会直接保留"
+                f"已从 Excel 导入 {len(records)} 个商品链接 · 首条：{preview}"
             )
 
         except Exception as exc:
