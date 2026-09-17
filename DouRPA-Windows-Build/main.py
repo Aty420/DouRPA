@@ -8,7 +8,7 @@ from PySide6.QtGui import QFont, QIcon
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from app.main_window_v240 import MainWindow
+from app.main_window_v241 import MainWindow
 from app.theme import APP_STYLESHEET
 
 
@@ -59,9 +59,6 @@ def enable_windows_backdrop(window):
             hwnd, 33, ctypes.byref(corner), ctypes.sizeof(corner)
         )
 
-        # Keep the stable Mica call from the existing application.
-        # The liquid-glass appearance itself is implemented in Qt, so this remains
-        # a best-effort enhancement and does not affect Windows 10 compatibility.
         backdrop = ctypes.c_int(2)
         dwmapi.DwmSetWindowAttribute(
             hwnd, 38, ctypes.byref(backdrop), ctypes.sizeof(backdrop)

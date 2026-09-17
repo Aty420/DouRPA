@@ -19,6 +19,7 @@ app_hiddenimports = [
     'app.main_window_v219',
     'app.main_window_v220',
     'app.main_window_v240',
+    'app.main_window_v241',
     'app.url_downloader',
     'app.db',
     'app.excel_service',
