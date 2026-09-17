@@ -30,7 +30,7 @@ jobs:
         working-directory: DouRPA-Windows-Build
         run: |
           python -m compileall -q main.py app
-          python -c "from app.rpa.publisher import DouDianSimilarPublisher; from app.main_window_v240 import MainWindow; from app.url_downloader import ProductLinkWorker; print('DouRPA V2.6.2 import validation OK')"
+          python -c "from app.rpa.publisher import DouDianSimilarPublisher; from app.main_window_v241 import MainWindow; from app.url_downloader import ProductLinkWorker; print('DouRPA V2.6.4 share-text parser validation OK')"
 
       - name: Build EXE
         working-directory: DouRPA-Windows-Build
