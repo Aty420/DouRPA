@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtGui import QFont, QIcon
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from app.main_window_v241 import MainWindow
@@ -68,6 +68,11 @@ def enable_windows_backdrop(window):
 
 
 def main() -> int:
+    # Qt 6 already uses logical pixels; PassThrough keeps 125% Windows DPI
+    # scaling crisp without CSS zoom/transform or whole-window scaling.
+    QApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
     app = QApplication(sys.argv)
     app.setApplicationName("DouRPA")
     app.setOrganizationName("LocalOps")
@@ -77,7 +82,7 @@ def main() -> int:
         app.setWindowIcon(QIcon(str(icon_path)))
 
     font = QFont("Microsoft YaHei UI")
-    font.setPointSize(10)
+    font.setPointSizeF(10.5)
     app.setFont(font)
     app.setStyleSheet(APP_STYLESHEET)
 
