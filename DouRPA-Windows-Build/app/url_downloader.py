@@ -975,6 +975,8 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
     trigger_requests = []
     trigger_active = False
     opened_by = ""
+    trigger_stage = "init"
+    trigger_error = ""
 
     resolved_url = _resolve_http_redirect(source_url)
     goods_detail = _extract_goods_detail_from_url(resolved_url)
@@ -1041,12 +1043,15 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
         except Exception:
             pass
 
-    def on_new_page(new_page):
-        # Keep H5 parsing in the existing page. Any accidental popup caused by
-        # the purchase trigger is closed immediately.
+    popup_pages = []
+
+    def on_popup(popup):
+        # Only popups created FROM the already-created product page are closed.
+        # Do not use context.on("page") before creating the main page, because
+        # that would close the main page itself.
         try:
-            if new_page is not page:
-                new_page.close()
+            popup_pages.append(_safe_page_url(popup, ""))
+            popup.close()
         except Exception:
             pass
 
@@ -1059,14 +1064,15 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
     except Exception:
         pass
     try:
-        context.on("page", on_new_page)
-    except Exception:
-        pass
-
-    try:
+        trigger_stage = "create_main_page"
         page = context.new_page()
         _install_app_jump_blocker(page)
+        try:
+            page.on("popup", on_popup)
+        except Exception:
+            pass
 
+        trigger_stage = "goto_product_h5"
         try:
             page.goto(resolved_url, wait_until="domcontentloaded", timeout=45000)
         except Exception as exc:
@@ -1080,6 +1086,10 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
             # Re-open resolved URL if site closed all tabs.
             page = context.new_page()
             _install_app_jump_blocker(page)
+            try:
+                page.on("popup", on_popup)
+            except Exception:
+                pass
             page.goto(resolved_url, wait_until="domcontentloaded", timeout=45000)
 
         try:
@@ -1112,8 +1122,10 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
         before_pack_count = len(pack_payloads)
         before_body_text = _safe_body_text(page)
 
+        trigger_stage = "click_sku_trigger"
         trigger_active = True
         opened, opened_by = _open_specs_or_purchase(page)
+        trigger_stage = "wait_trigger_network"
 
         page = _live_page(context, page)
 
@@ -1143,6 +1155,7 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
                     break
 
         trigger_active = False
+        trigger_stage = "parse_sku_payloads"
 
         # Parse every payload that arrived after opening the SKU sheet.
         for payload in payloads[before_payload_count:]:
@@ -1187,19 +1200,6 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
         for payload in payloads:
             _merge(result, _metadata_from_json(payload))
 
-        # Save every network request observed after clicking the SKU trigger.
-        # This lets us identify the exact request that produces SKU data without
-        # guessing if Douyin changes endpoint names.
-        if opened_by or trigger_requests:
-            _write_json(
-                debug_dir / f"{index:03d}_sku_trigger_network.json",
-                {
-                    "opened_by": opened_by,
-                    "request_count": len(trigger_requests),
-                    "requests": trigger_requests[-250:],
-                },
-            )
-
         # Save the exact two product-detail JSON families that are most likely
         # to contain SKU/spec information. Sensitive-looking keys are redacted.
         for seq, record in enumerate(pack_payloads, 1):
@@ -1220,7 +1220,26 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
                 },
             )
 
+        trigger_stage = "done"
+
+    except Exception as exc:
+        trigger_error = str(exc)
+        raise
+
     finally:
+        # ALWAYS save SKU-trigger diagnostics, even if the main page/trigger failed.
+        _write_json(
+            debug_dir / f"{index:03d}_sku_trigger_network.json",
+            {
+                "stage": trigger_stage,
+                "error": trigger_error,
+                "opened_by": opened_by,
+                "request_count": len(trigger_requests),
+                "popup_pages": popup_pages,
+                "current_page_url": _safe_page_url(page, ""),
+                "requests": trigger_requests[-250:],
+            },
+        )
         # Diagnostics must never throw if the page has already been closed.
         if not result["title"] or not result["image_url"] or not result["sku_titles"]:
             _save_debug(debug_dir, index, {
@@ -1243,8 +1262,11 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
                     1 for x in pack_payloads
                     if "/aweme/v2/shop/promotion/pack/detail/" in str(x.get("url", "")).lower()
                 ),
+                "trigger_stage": trigger_stage,
+                "trigger_error": trigger_error,
                 "opened_by": opened_by,
                 "trigger_request_count": len(trigger_requests),
+                "popup_pages": popup_pages,
                 "sku_values": result.get("sku_titles", []),
                 "body_preview": body_text[:6000],
                 "modal_body_preview": modal_body_text[:6000],
@@ -1260,11 +1282,6 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
             context.remove_listener("request", on_request)
         except Exception:
             pass
-        try:
-            context.remove_listener("page", on_new_page)
-        except Exception:
-            pass
-
         _safe_close_page(page)
 
     return result
