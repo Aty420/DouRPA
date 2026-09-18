@@ -6,11 +6,16 @@ from pathlib import Path
 from openpyxl import load_workbook
 from PySide6.QtWidgets import (
     QFileDialog,
+    QHBoxLayout,
     QLabel,
     QMessageBox,
+    QPlainTextEdit,
     QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
 )
 
+from app.main_window import SectionCard, button
 from app.main_window_v240 import MainWindow as V240MainWindow
 from app.url_downloader import ProductLinkWorker
 
@@ -136,7 +141,7 @@ def _extract_records(text: str) -> list[dict]:
 
 
 class MainWindow(V240MainWindow):
-    """V2.7.0: URL parser keeps only product title + first image."""
+    """V2.7.1: title/image-only URL parser + clearable run logs."""
 
     def _topbar(self):
         top = super()._topbar()
@@ -146,6 +151,59 @@ class MainWindow(V240MainWindow):
                 "上传商品链接 → 自动解析商品标题与首图URL → 下载首图并导出Excel",
             )
         return top
+
+    def _logs_page(self):
+        """Run-log page with refresh + clear actions."""
+        page = QWidget()
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(0, 0, 0, 0)
+
+        card = SectionCard(
+            "运行日志",
+            "RPA 页面结构变化时，优先查看失败节点、截图和 config/selectors.json。",
+        )
+
+        self.log_edit = QPlainTextEdit()
+        self.log_edit.setReadOnly(True)
+        card.body.addWidget(self.log_edit)
+
+        actions = QHBoxLayout()
+        refresh_btn = button("刷新日志")
+        refresh_btn.clicked.connect(self.refresh_logs)
+
+        clear_btn = button("清除日志", "danger")
+        clear_btn.clicked.connect(self._clear_run_logs)
+
+        actions.addWidget(refresh_btn)
+        actions.addWidget(clear_btn)
+        actions.addStretch(1)
+        card.body.addLayout(actions)
+
+        lay.addWidget(card, 1)
+        return page
+
+    def _clear_run_logs(self):
+        """Delete only rows in the logs table; keep tasks/stores/templates intact."""
+        answer = QMessageBox.question(
+            self,
+            "清除运行日志",
+            "确认清除全部运行日志？\n\n"
+            "此操作只清除“运行日志”记录，不会删除裂变任务、店铺、源商品模板、"
+            "浏览器登录状态或截图文件。",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+
+        try:
+            with self.db.connect() as conn:
+                conn.execute("DELETE FROM logs")
+
+            self.refresh_logs()
+            QMessageBox.information(self, "清除完成", "运行日志已清空。")
+        except Exception as exc:
+            QMessageBox.critical(self, "清除失败", f"无法清除运行日志：{exc}")
 
     def _url_product_page(self):
         page = super()._url_product_page()
