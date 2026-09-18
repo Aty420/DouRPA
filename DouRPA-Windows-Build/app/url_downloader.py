@@ -127,6 +127,116 @@ def _resolve_http_redirect(url: str) -> str:
         return url
 
 
+def _extract_goods_detail_from_url(url: str) -> dict:
+    """Parse Douyin's percent-encoded goods_detail query parameter.
+
+    Real Douyin share redirects often already contain:
+      goods_detail = {
+        "title": "...",
+        "img": {"url_list": ["https://...first-image...", ...]}
+      }
+
+    This is a much stronger source for the first product image than DOM guessing.
+    """
+    result = {
+        "found": False,
+        "title": "",
+        "image_url": "",
+        "image_urls": [],
+        "raw": {},
+    }
+    try:
+        parsed = urllib.parse.urlsplit(str(url or ""))
+        query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+        values = query.get("goods_detail") or []
+        if not values:
+            return result
+
+        raw_value = values[0]
+        if isinstance(raw_value, str):
+            obj = json.loads(raw_value)
+        else:
+            obj = raw_value
+
+        if not isinstance(obj, dict):
+            return result
+
+        result["found"] = True
+        result["raw"] = obj
+        result["title"] = _clean(obj.get("title", ""))
+
+        img = obj.get("img") or obj.get("image") or {}
+        urls = []
+        if isinstance(img, dict):
+            candidate = img.get("url_list") or img.get("urls") or []
+            if isinstance(candidate, str):
+                candidate = [candidate]
+            if isinstance(candidate, list):
+                for item in candidate:
+                    item = _clean(item)
+                    if item.startswith(("http://", "https://")) and item not in urls:
+                        urls.append(item)
+
+        result["image_urls"] = urls
+        result["image_url"] = urls[0] if urls else ""
+        return result
+    except Exception:
+        return result
+
+
+def _redact_sensitive(obj):
+    """Best-effort redaction for diagnostic JSON. No cookies/headers are stored."""
+    sensitive_words = (
+        "token", "cookie", "session", "signature", "sign", "verifyfp",
+        "a_bogus", "ms_token", "mstoken", "did", "secuid", "sec_author",
+        "passport", "auth", "device_id",
+    )
+
+    if isinstance(obj, dict):
+        out = {}
+        for key, value in obj.items():
+            key_text = str(key).lower()
+            if any(word in key_text for word in sensitive_words):
+                out[str(key)] = "<redacted>"
+            else:
+                out[str(key)] = _redact_sensitive(value)
+        return out
+    if isinstance(obj, list):
+        return [_redact_sensitive(x) for x in obj[:500]]
+    if isinstance(obj, str):
+        return obj[:3000]
+    return obj
+
+
+def _interesting_json_paths(obj, limit=300):
+    """Collect SKU/spec/property-related scalar paths for fast diagnosis."""
+    rows = []
+    hints = ("sku", "spec", "规格", "property", "prop", "sale", "pack", "product")
+    for path, value in _walk(obj):
+        joined = "/".join(str(x) for x in path).lower()
+        if not any(h in joined for h in hints):
+            continue
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            rows.append({
+                "path": "/".join(str(x) for x in path),
+                "value": str(value)[:600],
+            })
+            if len(rows) >= limit:
+                break
+    return rows
+
+
+def _write_json(path: Path, payload):
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
 def _walk(obj, path=()):
     if isinstance(obj, dict):
         for key, value in obj.items():
@@ -410,8 +520,26 @@ def _save_debug(debug_dir: Path, index: int, info: dict):
 
 
 def _save_jpg_from_url(url: str, target: Path, retries=2):
+    """Download source image and always save a real JPEG.
+
+    Also writes a diagnostic sidecar under 解析诊断 so that download/codec
+    failures can be distinguished from metadata parsing failures.
+    """
     last = None
+    target = Path(target)
+    diag_dir = target.parent.parent / "解析诊断"
+    prefix = target.name.split("_", 1)[0] if "_" in target.name else target.stem
+    diag_path = diag_dir / f"{prefix}_image_download.json"
+
+    diag = {
+        "image_url": url,
+        "target": str(target),
+        "attempts": [],
+        "saved": False,
+    }
+
     for attempt in range(retries + 1):
+        attempt_info = {"attempt": attempt + 1}
         try:
             parsed = urllib.parse.urlparse(url)
             req = urllib.request.Request(
@@ -427,18 +555,46 @@ def _save_jpg_from_url(url: str, target: Path, retries=2):
             )
             with urllib.request.urlopen(req, timeout=30) as resp:
                 data = resp.read()
+                attempt_info["http_status"] = getattr(resp, "status", None)
+                attempt_info["content_type"] = resp.headers.get("Content-Type", "")
+                attempt_info["content_length_header"] = resp.headers.get("Content-Length", "")
+
+            attempt_info["downloaded_bytes"] = len(data)
 
             with Image.open(io.BytesIO(data)) as img:
+                attempt_info["source_format"] = img.format
+                attempt_info["source_size"] = list(img.size)
+                attempt_info["source_mode"] = img.mode
+
                 if getattr(img, "n_frames", 1) > 1:
                     img.seek(0)
                 if img.mode != "RGB":
                     img = img.convert("RGB")
+
+                target.parent.mkdir(parents=True, exist_ok=True)
                 img.save(target, "JPEG", quality=95, optimize=True)
+
+            attempt_info["saved_path"] = str(target)
+            attempt_info["saved_bytes"] = target.stat().st_size if target.exists() else 0
+            attempt_info["success"] = target.exists() and target.stat().st_size > 0
+            diag["attempts"].append(attempt_info)
+            diag["saved"] = bool(attempt_info["success"])
+            _write_json(diag_path, diag)
+
+            if not diag["saved"]:
+                raise RuntimeError("JPG保存后文件为空")
             return
+
         except Exception as exc:
             last = exc
+            attempt_info["success"] = False
+            attempt_info["error"] = str(exc)
+            diag["attempts"].append(attempt_info)
+            _write_json(diag_path, diag)
+
             if attempt < retries:
                 time.sleep(0.7 * (attempt + 1))
+
     raise RuntimeError(f"JPG下载失败：{last}")
 
 
@@ -463,7 +619,17 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
     body_text = ""
 
     resolved_url = _resolve_http_redirect(source_url)
+    goods_detail = _extract_goods_detail_from_url(resolved_url)
+
+    # First priority for title/image: encoded product metadata already present in
+    # the Douyin redirect URL itself. This avoids guessing the first image from DOM.
+    if goods_detail.get("title"):
+        result["title"] = goods_detail["title"]
+    if goods_detail.get("image_url"):
+        result["image_url"] = goods_detail["image_url"]
+
     page = None
+    pack_payloads = []
 
     def on_response(response):
         try:
@@ -487,7 +653,18 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
 
             if "json" in ctype:
                 try:
-                    payloads.append(response.json())
+                    payload = response.json()
+                    payloads.append(payload)
+
+                    low_url = rurl.lower()
+                    if (
+                        "/aweme/v2/shop/promotion/pack/h5/" in low_url
+                        or "/aweme/v2/shop/promotion/pack/detail/" in low_url
+                    ):
+                        pack_payloads.append({
+                            "url": rurl,
+                            "payload": payload,
+                        })
                 except Exception:
                     pass
         except Exception:
@@ -568,6 +745,21 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
         for payload in payloads:
             _merge(result, _metadata_from_json(payload))
 
+        # Save the exact two product-detail JSON families that are most likely
+        # to contain SKU/spec information. Sensitive-looking keys are redacted.
+        for seq, record in enumerate(pack_payloads, 1):
+            api_url = record.get("url", "")
+            payload = record.get("payload")
+            kind = "pack_detail" if "/pack/detail/" in api_url.lower() else "pack_h5"
+            _write_json(
+                debug_dir / f"{index:03d}_{kind}_{seq}.json",
+                {
+                    "api_url": api_url,
+                    "sku_spec_paths": _interesting_json_paths(payload),
+                    "payload": _redact_sensitive(payload),
+                },
+            )
+
     finally:
         # Diagnostics must never throw if the page has already been closed.
         if not result["title"] or not result["image_url"] or not result["sku_titles"]:
@@ -578,7 +770,15 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
                 "page_title": _safe_page_title(page),
                 "title_found": bool(result.get("title")),
                 "image_found": bool(result.get("image_url")),
+                "selected_image_url": result.get("image_url", ""),
                 "sku_count": len(result.get("sku_titles") or []),
+                "goods_detail": {
+                    "found": bool(goods_detail.get("found")),
+                    "title": goods_detail.get("title", ""),
+                    "image_url": goods_detail.get("image_url", ""),
+                    "image_urls": goods_detail.get("image_urls", []),
+                },
+                "pack_payload_count": len(pack_payloads),
                 "body_preview": body_text[:6000],
                 "responses": responses[-180:],
             })
