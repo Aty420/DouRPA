@@ -298,7 +298,11 @@ _SKU_DIRECT_KEYS = {
 }
 
 _PRODUCT_CONTEXT = ("product", "goods", "item", "commodity", "商品")
-_SKU_CONTEXT = ("sku", "spec", "规格", "saleprop", "sale_prop", "product_sku")
+_SKU_CONTEXT = (
+    "sku", "spec", "规格", "saleprop", "sale_prop", "product_sku",
+    "property", "properties", "prop_value", "sale_property",
+    "variant", "variation", "option", "specification",
+)
 
 
 def _metadata_from_json(payload) -> dict:
@@ -598,6 +602,355 @@ def _save_jpg_from_url(url: str, target: Path, retries=2):
     raise RuntimeError(f"JPG下载失败：{last}")
 
 
+
+def _response_json_payload(response):
+    """Read JSON responses robustly.
+
+    Playwright response.json() can occasionally fail even when Content-Type is
+    application/json. Fall back to response.text() + json.loads().
+    """
+    errors = []
+    try:
+        return response.json(), errors
+    except Exception as exc:
+        errors.append(f"response.json: {exc}")
+
+    try:
+        raw = response.text()
+        return json.loads(raw), errors
+    except Exception as exc:
+        errors.append(f"response.text/json.loads: {exc}")
+
+    try:
+        raw = response.body().decode("utf-8", errors="ignore")
+        return json.loads(raw), errors
+    except Exception as exc:
+        errors.append(f"response.body/json.loads: {exc}")
+
+    return None, errors
+
+
+_SKU_NOISE = {
+    "包装规格", "选择规格", "选规格", "规格", "已选", "数量", "购买数量",
+    "加入购物车", "立即购买", "去抢购", "客服", "购物车", "店铺",
+    "确定", "取消", "关闭", "库存", "有货", "配送", "服务", "保障",
+}
+
+
+def _sku_like_text(value: str, product_title: str = "") -> bool:
+    value = _clean(value)
+    if not _human(value, 2, 180):
+        return False
+    if value in _SKU_NOISE:
+        return False
+    if product_title and value == _clean(product_title):
+        return False
+    if value.startswith(("¥", "￥")):
+        return False
+    if re.fullmatch(r"[\d\s.,/%+\-*]+", value):
+        return False
+    if any(x in value for x in ("运费险", "无理由退货", "商家资质", "商品评价", "回头客")):
+        return False
+    return True
+
+
+def _extract_modal_skus(before_text: str, after_text: str, product_title: str = "") -> list[str]:
+    """Extract newly appeared SKU/spec option lines after opening the purchase sheet."""
+    before = {_clean(x) for x in str(before_text or "").splitlines() if _clean(x)}
+    after = [_clean(x) for x in str(after_text or "").splitlines() if _clean(x)]
+
+    # First use the existing explicit 包装规格 parser if the sheet exposes a heading.
+    explicit = _visible_skus(after_text)
+    explicit = [x for x in explicit if _sku_like_text(x, product_title)]
+    if explicit:
+        return explicit
+
+    # Otherwise use text that appeared only after the bottom sheet opened.
+    fresh = []
+    for line in after:
+        if line in before:
+            continue
+        if not _sku_like_text(line, product_title):
+            continue
+        fresh.append(line)
+
+    # Strong preference: option text usually contains quantity/size/color tokens.
+    strong_tokens = (
+        "抽", "提", "包", "箱", "卷", "片", "支", "瓶", "盒", "袋",
+        "ml", "ML", "g", "kg", "KG", "cm", "mm", "码", "色", "款",
+    )
+    strong = [x for x in fresh if any(tok in x for tok in strong_tokens)]
+
+    result = strong if strong else fresh
+    deduped = []
+    for item in result:
+        if item not in deduped:
+            deduped.append(item)
+    return deduped[:80]
+
+
+
+_APP_SCHEMES = ("sslocal://", "snssdk://", "aweme://", "douyin://")
+
+
+def _install_app_jump_blocker(page):
+    """Best-effort block of Douyin app deep links while keeping page JS/network alive."""
+    if page is None:
+        return
+
+    script = r"""
+    (() => {
+      const blocked = ['sslocal://', 'snssdk://', 'aweme://', 'douyin://'];
+      const isBlocked = (u) => {
+        try {
+          const s = String(u || '').toLowerCase();
+          return blocked.some(p => s.startsWith(p));
+        } catch (_) {
+          return false;
+        }
+      };
+
+      // 1) Block anchor-based deep links in capture phase.
+      document.addEventListener('click', (ev) => {
+        try {
+          const el = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+          if (el && isBlocked(el.getAttribute('href') || el.href)) {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+          }
+        } catch (_) {}
+      }, true);
+
+      // 2) Block window.open deep links.
+      try {
+        const oldOpen = window.open;
+        window.open = function(url, ...args) {
+          if (isBlocked(url)) return null;
+          return oldOpen.call(this, url, ...args);
+        };
+      } catch (_) {}
+
+      // 3) Block location.assign / location.replace when writable.
+      try {
+        const oldAssign = Location.prototype.assign;
+        Location.prototype.assign = function(url) {
+          if (isBlocked(url)) return;
+          return oldAssign.call(this, url);
+        };
+      } catch (_) {}
+
+      try {
+        const oldReplace = Location.prototype.replace;
+        Location.prototype.replace = function(url) {
+          if (isBlocked(url)) return;
+          return oldReplace.call(this, url);
+        };
+      } catch (_) {}
+
+      window.__DOU_RPA_DEEPLINK_BLOCKER__ = true;
+    })();
+    """
+
+    try:
+        page.add_init_script(script)
+    except Exception:
+        pass
+
+    try:
+        page.evaluate(script)
+    except Exception:
+        pass
+
+    # CDP-level block as a second layer. Not every Chromium build handles
+    # custom schemes here, but it is harmless and catches normal navigations.
+    try:
+        session = page.context.new_cdp_session(page)
+        session.send("Network.enable")
+        session.send(
+            "Network.setBlockedURLs",
+            {"urls": ["sslocal://*", "snssdk://*", "aweme://*", "douyin://*"]},
+        )
+    except Exception:
+        pass
+
+
+def _decode_nested_json(value):
+    """Yield decoded JSON objects embedded inside string fields."""
+    if not isinstance(value, str):
+        return
+    s = value.strip()
+    if not s or s[0] not in "[{":
+        return
+    try:
+        obj = json.loads(s)
+    except Exception:
+        return
+    yield obj
+    for _, child in _walk(obj):
+        if isinstance(child, str):
+            yield from _decode_nested_json(child)
+
+
+def _sku_candidate_score(path: tuple, value: str, product_title: str = "") -> int:
+    value = _clean(value)
+    if not _sku_like_text(value, product_title):
+        return -999
+
+    joined = "/".join(str(x).lower() for x in path)
+    key = str(path[-1]).lower() if path else ""
+
+    score = 0
+    context_tokens = (
+        "sku", "spec", "property", "properties", "prop",
+        "variant", "variation", "option", "specification",
+        "sale_property", "saleprop",
+    )
+    if any(tok in joined for tok in context_tokens):
+        score += 60
+
+    if key in {
+        "name", "title", "text", "label", "value", "desc", "display_name",
+        "spec_name", "spec_value", "spec_value_name", "sku_name", "sku_title",
+        "property_name", "property_value_name", "option_name",
+    }:
+        score += 30
+
+    strong_tokens = (
+        "抽", "提", "包", "箱", "卷", "片", "支", "瓶", "盒", "袋",
+        "ml", "ML", "g", "kg", "KG", "cm", "mm", "码", "色", "款",
+    )
+    if any(tok in value for tok in strong_tokens):
+        score += 25
+
+    if "*" in value or "×" in value:
+        score += 15
+    if "(" in value or "（" in value:
+        score += 8
+
+    # Penalize obvious generic UI/marketing strings.
+    if any(x in value for x in (
+        "运费险", "无理由退货", "商家资质", "商品评价", "加入购物车",
+        "去抢购", "立即购买", "现在下单", "包邮", "活动", "优惠",
+    )):
+        score -= 80
+
+    return score
+
+
+def _extract_sku_titles_from_payload(payload, product_title: str = "") -> list[str]:
+    """Extract likely SKU option titles from arbitrary Douyin JSON structures."""
+    scored = []
+
+    def scan(obj):
+        for path, value in _walk(obj):
+            if isinstance(value, str):
+                score = _sku_candidate_score(path, value, product_title)
+                if score >= 60:
+                    scored.append((score, len(_clean(value)), _clean(value)))
+
+                # Some API fields contain JSON strings.
+                for nested in _decode_nested_json(value) or []:
+                    scan(nested)
+
+    scan(payload)
+
+    # Highest confidence first, dedupe by exact text.
+    scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    out = []
+    for _, _, value in scored:
+        if value not in out:
+            out.append(value)
+    return out[:80]
+
+
+def _safe_request_snapshot(request):
+    try:
+        url = request.url
+    except Exception:
+        url = ""
+    try:
+        method = request.method
+    except Exception:
+        method = ""
+    try:
+        post_data = request.post_data or ""
+    except Exception:
+        post_data = ""
+
+    # Avoid dumping very large or sensitive payloads.
+    if len(post_data) > 4000:
+        post_data = post_data[:4000] + "...<truncated>"
+
+    return {
+        "url": url,
+        "method": method,
+        "resource_type": getattr(request, "resource_type", ""),
+        "post_data": post_data,
+    }
+
+
+def _open_specs_or_purchase(page) -> tuple[bool, str]:
+    """Trigger the SKU panel without intentionally leaving H5.
+
+    Priority:
+    1. Existing spec entry, if present.
+    2. 加入购物车
+    3. 去抢购
+    4. 立即购买
+
+    Before clicking, install several deep-link blockers. The click itself is
+    dispatched with DOM click() so Playwright does not wait for app navigation.
+    """
+    if page is None:
+        return False, ""
+
+    _install_app_jump_blocker(page)
+
+    labels = (
+        "包装规格", "选择规格", "选规格", "规格",
+        "加入购物车", "去抢购", "立即购买",
+    )
+
+    for label in labels:
+        # First try exact text.
+        try:
+            loc = page.get_by_text(label, exact=True)
+            for i in range(min(loc.count(), 10)):
+                item = loc.nth(i)
+                if item.is_visible():
+                    try:
+                        item.evaluate("(el) => el.click()")
+                    except Exception:
+                        item.click(timeout=2500, no_wait_after=True)
+                    try:
+                        page.wait_for_timeout(900)
+                    except Exception:
+                        pass
+                    return True, label
+        except Exception:
+            pass
+
+        # Then loose text, useful for buttons that contain nested spans.
+        try:
+            loc = page.get_by_text(label, exact=False)
+            for i in range(min(loc.count(), 10)):
+                item = loc.nth(i)
+                if item.is_visible():
+                    try:
+                        item.evaluate("(el) => el.click()")
+                    except Exception:
+                        item.click(timeout=2500, no_wait_after=True)
+                    try:
+                        page.wait_for_timeout(900)
+                    except Exception:
+                        pass
+                    return True, label
+        except Exception:
+            continue
+
+    return False, ""
+
+
 def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
     """Robust product-link resolver.
 
@@ -617,6 +970,11 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
     responses = []
     payloads = []
     body_text = ""
+    modal_body_text = ""
+    response_json_errors = []
+    trigger_requests = []
+    trigger_active = False
+    opened_by = ""
 
     resolved_url = _resolve_http_redirect(source_url)
     goods_detail = _extract_goods_detail_from_url(resolved_url)
@@ -652,8 +1010,14 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
             })
 
             if "json" in ctype:
-                try:
-                    payload = response.json()
+                payload, parse_errors = _response_json_payload(response)
+                if parse_errors:
+                    response_json_errors.append({
+                        "url": rurl,
+                        "errors": parse_errors,
+                    })
+
+                if payload is not None:
                     payloads.append(payload)
 
                     low_url = rurl.lower()
@@ -665,8 +1029,24 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
                             "url": rurl,
                             "payload": payload,
                         })
-                except Exception:
-                    pass
+        except Exception:
+            pass
+
+    def on_request(request):
+        nonlocal trigger_active
+        if not trigger_active:
+            return
+        try:
+            trigger_requests.append(_safe_request_snapshot(request))
+        except Exception:
+            pass
+
+    def on_new_page(new_page):
+        # Keep H5 parsing in the existing page. Any accidental popup caused by
+        # the purchase trigger is closed immediately.
+        try:
+            if new_page is not page:
+                new_page.close()
         except Exception:
             pass
 
@@ -674,9 +1054,18 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
         context.on("response", on_response)
     except Exception:
         pass
+    try:
+        context.on("request", on_request)
+    except Exception:
+        pass
+    try:
+        context.on("page", on_new_page)
+    except Exception:
+        pass
 
     try:
         page = context.new_page()
+        _install_app_jump_blocker(page)
 
         try:
             page.goto(resolved_url, wait_until="domcontentloaded", timeout=45000)
@@ -690,6 +1079,7 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
         if page is None:
             # Re-open resolved URL if site closed all tabs.
             page = context.new_page()
+            _install_app_jump_blocker(page)
             page.goto(resolved_url, wait_until="domcontentloaded", timeout=45000)
 
         try:
@@ -718,23 +1108,75 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
             result["image_url"] = _largest_image(page)
 
         # Trigger SKU/spec data.
-        before = len(payloads)
-        _open_specs(page)
+        before_payload_count = len(payloads)
+        before_pack_count = len(pack_payloads)
+        before_body_text = _safe_body_text(page)
+
+        trigger_active = True
+        opened, opened_by = _open_specs_or_purchase(page)
 
         page = _live_page(context, page)
-        if page is not None:
-            try:
-                page.wait_for_timeout(1000)
-            except Exception:
-                pass
 
-        for payload in payloads[before:]:
+        # Give the H5 page time to generate signed XHR/fetch requests after the
+        # click. We do not navigate away; we only observe the resulting network.
+        if opened:
+            deadline = time.monotonic() + 6.0
+            while time.monotonic() < deadline:
+                page = _live_page(context, page)
+                if page is not None:
+                    try:
+                        page.wait_for_timeout(250)
+                    except Exception:
+                        pass
+
+                has_detail = any(
+                    "/aweme/v2/shop/promotion/pack/detail/" in str(x.get("url", "")).lower()
+                    for x in pack_payloads[before_pack_count:]
+                )
+                if has_detail:
+                    # Keep a little extra time for late responses / modal rendering.
+                    if page is not None:
+                        try:
+                            page.wait_for_timeout(700)
+                        except Exception:
+                            pass
+                    break
+
+        trigger_active = False
+
+        # Parse every payload that arrived after opening the SKU sheet.
+        for payload in payloads[before_payload_count:]:
             _merge(result, _metadata_from_json(payload))
 
+        # Also explicitly parse the captured pack payloads, including late pack/detail.
+        for record in pack_payloads:
+            payload = record.get("payload")
+            if payload is not None:
+                _merge(result, _metadata_from_json(payload))
+                for sku in _extract_sku_titles_from_payload(
+                    payload,
+                    result.get("title", ""),
+                ):
+                    if sku not in result["sku_titles"]:
+                        result["sku_titles"].append(sku)
+
         body_text = _safe_body_text(page)
+        modal_body_text = body_text
+
+        # Existing heading-based parser.
         for sku in _visible_skus(body_text):
-            if sku not in result["sku_titles"]:
+            if _sku_like_text(sku, result.get("title", "")) and sku not in result["sku_titles"]:
                 result["sku_titles"].append(sku)
+
+        # H5 fallback: capture text newly introduced by 加入购物车/去抢购 bottom sheet.
+        if not result["sku_titles"] and opened:
+            for sku in _extract_modal_skus(
+                before_body_text,
+                body_text,
+                result.get("title", ""),
+            ):
+                if sku not in result["sku_titles"]:
+                    result["sku_titles"].append(sku)
 
         if not result["title"]:
             result["title"] = _dom_title(page)
@@ -744,6 +1186,19 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
         # Final JSON pass in case late network responses arrived.
         for payload in payloads:
             _merge(result, _metadata_from_json(payload))
+
+        # Save every network request observed after clicking the SKU trigger.
+        # This lets us identify the exact request that produces SKU data without
+        # guessing if Douyin changes endpoint names.
+        if opened_by or trigger_requests:
+            _write_json(
+                debug_dir / f"{index:03d}_sku_trigger_network.json",
+                {
+                    "opened_by": opened_by,
+                    "request_count": len(trigger_requests),
+                    "requests": trigger_requests[-250:],
+                },
+            )
 
         # Save the exact two product-detail JSON families that are most likely
         # to contain SKU/spec information. Sensitive-looking keys are redacted.
@@ -756,6 +1211,11 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
                 {
                     "api_url": api_url,
                     "sku_spec_paths": _interesting_json_paths(payload),
+                    "extracted_metadata": _metadata_from_json(payload),
+                    "sku_candidates": _extract_sku_titles_from_payload(
+                        payload,
+                        result.get("title", ""),
+                    ),
                     "payload": _redact_sensitive(payload),
                 },
             )
@@ -779,12 +1239,29 @@ def resolve_page(context, source_url: str, index: int, debug_dir: Path) -> dict:
                     "image_urls": goods_detail.get("image_urls", []),
                 },
                 "pack_payload_count": len(pack_payloads),
+                "pack_detail_count": sum(
+                    1 for x in pack_payloads
+                    if "/aweme/v2/shop/promotion/pack/detail/" in str(x.get("url", "")).lower()
+                ),
+                "opened_by": opened_by,
+                "trigger_request_count": len(trigger_requests),
+                "sku_values": result.get("sku_titles", []),
                 "body_preview": body_text[:6000],
+                "modal_body_preview": modal_body_text[:6000],
+                "response_json_errors": response_json_errors[-30:],
                 "responses": responses[-180:],
             })
 
         try:
             context.remove_listener("response", on_response)
+        except Exception:
+            pass
+        try:
+            context.remove_listener("request", on_request)
+        except Exception:
+            pass
+        try:
+            context.remove_listener("page", on_new_page)
         except Exception:
             pass
 
