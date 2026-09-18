@@ -59,7 +59,7 @@ class MainWindow(V212MainWindow):
         tip.setWordWrap(True)
         tip.setStyleSheet(
             "background:rgba(246,248,255,190);color:#53627A;"
-            "border:1px solid rgba(225,232,255,210);border-radius:10px;padding:12px;font-size:11px;"
+            "border:1px solid rgba(225,232,255,210);border-radius:10px;padding:12px;font-size:13px;"
         )
         quick.body.addWidget(tip)
         row.addWidget(quick, 2)
@@ -69,7 +69,7 @@ class MainWindow(V212MainWindow):
         self.run_status.setStyleSheet("font-size:22px;font-weight:700;color:#111827;")
         self.run_desc = QLabel("选择店铺并打开浏览器后，即可执行裂变任务。")
         self.run_desc.setWordWrap(True)
-        self.run_desc.setStyleSheet("color:#7B8497;font-size:11px;")
+        self.run_desc.setStyleSheet("color:#7B8497;font-size:13px;")
         self.run_progress = QProgressBar()
         self.run_progress.setValue(0)
         self.end_run_button = button("结束运行", "danger")

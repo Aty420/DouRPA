@@ -55,8 +55,8 @@ def status_pill(raw, store=False):
     lab.setAlignment(Qt.AlignCenter)
     lab.setTextFormat(Qt.PlainText)
     lab.setMinimumWidth(76)
-    lab.setMaximumHeight(28)
-    font = QFont("Microsoft YaHei UI", 9)
+    lab.setMaximumHeight(32)
+    font = QFont("Microsoft YaHei UI", 10)
     font.setWeight(QFont.DemiBold)
     lab.setFont(font)
     lab.setStyleSheet(

@@ -57,9 +57,9 @@ def fixed_status_pill(raw, *, store=False):
     lab = QLabel(text)
     lab.setAlignment(Qt.AlignCenter)
     lab.setTextFormat(Qt.PlainText)
-    lab.setFixedHeight(24)
+    lab.setFixedHeight(28)
     lab.setMinimumWidth(78 if not store else 96)
-    font = QFont("Microsoft YaHei UI", 9)
+    font = QFont("Microsoft YaHei UI", 10)
     font.setWeight(QFont.DemiBold)
     lab.setFont(font)
     lab.setStyleSheet(

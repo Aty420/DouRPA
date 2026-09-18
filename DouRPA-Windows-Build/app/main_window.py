@@ -58,7 +58,7 @@ def badge(text: str):
         "未登录":("#F2F4F7","#475467")
     }
     bg,fg=palette.get(text,("#F2F4F7","#475467")); lab=QLabel(text); lab.setAlignment(Qt.AlignCenter)
-    lab.setStyleSheet(f"background:{bg};color:{fg};border-radius:8px;padding:4px 8px;font-size:10px;font-weight:600;")
+    lab.setStyleSheet(f"background:{bg};color:{fg};border-radius:8px;padding:4px 8px;font-size:12px;font-weight:600;")
     return lab
 
 
@@ -148,9 +148,9 @@ class MainWindow(QMainWindow):
         lay.addStretch(1)
         box=QFrame(); box.setStyleSheet("background:#131D30;border:1px solid #1E2A43;border-radius:12px;")
         bl=QVBoxLayout(box); bl.setContentsMargins(12,12,12,12)
-        a=QLabel("只改 3 个字段"); a.setStyleSheet("color:#E5EAF3;font-weight:700;font-size:11px;")
+        a=QLabel("只改 3 个字段"); a.setStyleSheet("color:#E5EAF3;font-weight:700;font-size:13px;")
         b=QLabel("标题 · 第一张主图 · SKU名称\n其余继承内容不主动修改")
-        b.setStyleSheet("color:#7F8BA4;font-size:10px;"); bl.addWidget(a); bl.addWidget(b); lay.addWidget(box)
+        b.setStyleSheet("color:#7F8BA4;font-size:12px;"); bl.addWidget(a); bl.addWidget(b); lay.addWidget(box)
         return f
 
     def _topbar(self):
@@ -166,7 +166,7 @@ class MainWindow(QMainWindow):
         self.page_title=QLabel(titles[0][0]); self.page_title.setObjectName("PageTitle")
         self.page_sub=QLabel(titles[0][1]); self.page_sub.setObjectName("PageSub")
         vl.addWidget(self.page_title); vl.addWidget(self.page_sub); lay.addLayout(vl); lay.addStretch(1)
-        lay.addWidget(StatusDot()); self.engine_label=QLabel("本地 RPA 引擎就绪"); self.engine_label.setStyleSheet("color:#667085;font-size:11px;")
+        lay.addWidget(StatusDot()); self.engine_label=QLabel("本地 RPA 引擎就绪"); self.engine_label.setStyleSheet("color:#667085;font-size:13px;")
         lay.addWidget(self.engine_label); lay.addSpacing(10)
         b=button("打开当前店铺","primary"); b.clicked.connect(self.open_store_browser); lay.addWidget(b); return f
 
@@ -185,11 +185,11 @@ class MainWindow(QMainWindow):
         b3=button("运行全部待执行"); b3.clicked.connect(self.run_pending_tasks)
         q.addWidget(b1); q.addWidget(b2); q.addWidget(b3); q.addStretch(1); quick.body.addLayout(q)
         tip=QLabel("执行链路：搜索源商品 → 发布相似品 → 改标题 → 替换第一张主图 → 改 SKU 名称 → 发布前校验 → 提交 → 识别“商品提交成功”")
-        tip.setWordWrap(True); tip.setStyleSheet("background:#F6F8FF;color:#53627A;border:1px solid #E1E8FF;border-radius:10px;padding:12px;font-size:11px;")
+        tip.setWordWrap(True); tip.setStyleSheet("background:#F6F8FF;color:#53627A;border:1px solid #E1E8FF;border-radius:10px;padding:12px;font-size:13px;")
         quick.body.addWidget(tip); row.addWidget(quick,2)
         run=SectionCard("当前运行","浏览器与任务状态")
         self.run_status=QLabel("未启动"); self.run_status.setStyleSheet("font-size:22px;font-weight:700;color:#111827;")
-        self.run_desc=QLabel("选择店铺并打开浏览器后，即可执行裂变任务。"); self.run_desc.setWordWrap(True); self.run_desc.setStyleSheet("color:#7B8497;font-size:11px;")
+        self.run_desc=QLabel("选择店铺并打开浏览器后，即可执行裂变任务。"); self.run_desc.setWordWrap(True); self.run_desc.setStyleSheet("color:#7B8497;font-size:13px;")
         self.run_progress=QProgressBar(); self.run_progress.setValue(0)
         run.body.addWidget(self.run_status); run.body.addWidget(self.run_desc); run.body.addWidget(self.run_progress); row.addWidget(run,1)
         lay.addLayout(row)

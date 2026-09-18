@@ -25,7 +25,7 @@ class MainWindow(V219MainWindow):
     - make Start Run full-surface press feedback.
     """
 
-    TOP_BLOCK_W = 172
+    TOP_BLOCK_W = 184
     TOP_BLOCK_H = 48
 
     def _sidebar(self):
@@ -94,7 +94,7 @@ class MainWindow(V219MainWindow):
     def _topbar(self):
         top = QFrame()
         top.setObjectName("Topbar")
-        top.setFixedHeight(92)
+        top.setFixedHeight(96)
 
         row = QHBoxLayout(top)
         row.setContentsMargins(4, 0, 0, 0)

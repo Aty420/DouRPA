@@ -70,7 +70,7 @@ class ReferenceMetricCard(QFrame):
         super().__init__()
         self.setObjectName("ReferenceMetricCard")
         self.setProperty("accent", accent)
-        self.setFixedHeight(102)
+        self.setFixedHeight(112)
 
         row = QHBoxLayout(self)
         row.setContentsMargins(17, 13, 16, 13)
@@ -80,7 +80,7 @@ class ReferenceMetricCard(QFrame):
         self.icon.setObjectName("ReferenceMetricIcon")
         self.icon.setProperty("accent", accent)
         self.icon.setAlignment(Qt.AlignCenter)
-        self.icon.setFixedSize(48, 48)
+        self.icon.setFixedSize(52, 52)
         f = QFont("Microsoft YaHei UI", 18)
         f.setWeight(QFont.DemiBold)
         self.icon.setFont(f)
@@ -165,7 +165,7 @@ class MainWindow(V216MainWindow):
         super().__init__(root)
 
         self.resize(1672, 941)
-        self.setMinimumSize(1400, 820)
+        self.setMinimumSize(1180, 680)
 
         # Bind the new dashboard controls to the original application behavior.
         if hasattr(self, "safe_mode"):
@@ -278,7 +278,7 @@ class MainWindow(V216MainWindow):
     def _topbar(self):
         top = QFrame()
         top.setObjectName("Topbar")
-        top.setFixedHeight(92)
+        top.setFixedHeight(96)
 
         row = QHBoxLayout(top)
         row.setContentsMargins(4, 0, 0, 0)
@@ -399,7 +399,7 @@ class MainWindow(V216MainWindow):
 
         batch = QFrame()
         batch.setObjectName("Card")
-        batch.setFixedHeight(332)
+        batch.setFixedHeight(350)
 
         bl = QVBoxLayout(batch)
         bl.setContentsMargins(18, 15, 18, 16)
@@ -428,7 +428,7 @@ class MainWindow(V216MainWindow):
             item = QFrame()
             item.setObjectName("ReferenceFlowItem")
             item.setProperty("active", i == 1)
-            item.setFixedHeight(42)
+            item.setFixedHeight(46)
 
             il = QHBoxLayout(item)
             il.setContentsMargins(10, 5, 10, 5)
@@ -438,7 +438,7 @@ class MainWindow(V216MainWindow):
             number.setObjectName("ReferenceFlowNumber")
             number.setProperty("active", i == 1)
             number.setAlignment(Qt.AlignCenter)
-            number.setFixedSize(28, 28)
+            number.setFixedSize(30, 30)
 
             label = QLabel(text)
             label.setObjectName("ReferenceFlowText")
@@ -463,12 +463,12 @@ class MainWindow(V216MainWindow):
         self.task_selector_button = QPushButton()
         self.task_selector_button.setObjectName("ReferenceTaskSelector")
         self.task_selector_button.setCursor(Qt.PointingHandCursor)
-        self.task_selector_button.setFixedHeight(92)
+        self.task_selector_button.setFixedHeight(98)
         self.task_selector_button.clicked.connect(lambda: self.switch_page(1))
         bl.addWidget(self.task_selector_button)
 
         bottom = QHBoxLayout()
-        bottom.setSpacing(16)
+        bottom.setSpacing(12)
 
         # Publish quantity: display only, auto-calculated from tasks.
         qty_box = QVBoxLayout()
@@ -479,7 +479,7 @@ class MainWindow(V216MainWindow):
         self.publish_quantity_display.setObjectName("ReadOnlyQuantity")
         self.publish_quantity_display.setReadOnly(True)
         self.publish_quantity_display.setAlignment(Qt.AlignCenter)
-        self.publish_quantity_display.setFixedSize(132, 40)
+        self.publish_quantity_display.setFixedSize(120, 42)
         qty_box.addWidget(qty_label)
         qty_box.addWidget(self.publish_quantity_display)
         bottom.addLayout(qty_box)
@@ -492,7 +492,7 @@ class MainWindow(V216MainWindow):
 
         range_frame = QFrame()
         range_frame.setObjectName("DelayRangeFrame")
-        range_frame.setFixedSize(176, 40)
+        range_frame.setFixedSize(164, 42)
         rf = QHBoxLayout(range_frame)
         rf.setContentsMargins(4, 2, 4, 2)
         rf.setSpacing(2)
@@ -501,7 +501,7 @@ class MainWindow(V216MainWindow):
         self.delay_min_spin.setObjectName("DelayRangeSpin")
         self.delay_min_spin.setRange(0, 300)
         self.delay_min_spin.setAlignment(Qt.AlignCenter)
-        self.delay_min_spin.setFixedWidth(72)
+        self.delay_min_spin.setFixedWidth(66)
 
         dash = QLabel("—")
         dash.setAlignment(Qt.AlignCenter)
@@ -512,7 +512,7 @@ class MainWindow(V216MainWindow):
         self.delay_max_spin.setObjectName("DelayRangeSpin")
         self.delay_max_spin.setRange(0, 300)
         self.delay_max_spin.setAlignment(Qt.AlignCenter)
-        self.delay_max_spin.setFixedWidth(72)
+        self.delay_max_spin.setFixedWidth(66)
 
         rf.addWidget(self.delay_min_spin)
         rf.addWidget(dash)
@@ -550,17 +550,17 @@ class MainWindow(V216MainWindow):
         self.dashboard_publish_button = QPushButton("▶  开始发布")
         self.dashboard_publish_button.setObjectName("ReferencePublishButton")
         self.dashboard_publish_button.setCursor(Qt.PointingHandCursor)
-        self.dashboard_publish_button.setFixedSize(218, 58)
+        self.dashboard_publish_button.setFixedSize(200, 58)
         self.dashboard_publish_button.clicked.connect(self.run_pending_tasks)
         bottom.addWidget(self.dashboard_publish_button, 0, Qt.AlignBottom)
 
         bl.addLayout(bottom)
-        middle.addWidget(batch, 2)
+        middle.addWidget(batch, 7)
 
         # Right side "当前运行" card, without controls not present in the reference.
         run = QFrame()
         run.setObjectName("Card")
-        run.setFixedHeight(332)
+        run.setFixedHeight(350)
 
         rl = QVBoxLayout(run)
         rl.setContentsMargins(18, 15, 18, 15)
@@ -631,7 +631,7 @@ class MainWindow(V216MainWindow):
         il.addLayout(runtime_line)
 
         rl.addWidget(info)
-        middle.addWidget(run, 1)
+        middle.addWidget(run, 3)
 
         lay.addLayout(middle)
 
@@ -674,7 +674,7 @@ class MainWindow(V216MainWindow):
         )
         self.dashboard_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.dashboard_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.dashboard_table.verticalHeader().setDefaultSectionSize(38)
+        self.dashboard_table.verticalHeader().setDefaultSectionSize(44)
 
         recent_l.addWidget(self.dashboard_table)
         lay.addWidget(recent, 1)

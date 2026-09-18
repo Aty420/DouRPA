@@ -4,12 +4,22 @@ import re
 from pathlib import Path
 
 from openpyxl import load_workbook
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (
+    QAbstractButton,
+    QComboBox,
+    QDoubleSpinBox,
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPlainTextEdit,
+    QScrollArea,
+    QSpinBox,
+    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -18,6 +28,7 @@ from PySide6.QtWidgets import (
 from app.main_window import SectionCard, button
 from app.main_window_v240 import MainWindow as V240MainWindow
 from app.url_downloader import ProductLinkWorker
+from app.ui_tokens import SIZE
 
 
 _SUPPORTED_PRODUCT_HOSTS = (
@@ -141,7 +152,95 @@ def _extract_records(text: str) -> list[dict]:
 
 
 class MainWindow(V240MainWindow):
-    """V2.7.1: title/image-only URL parser + clearable run logs."""
+    """V2.7.2: readable typography/spacing + title/image URL parser + clear logs."""
+
+    def __init__(self, root: Path):
+        super().__init__(root)
+
+        # 1280×720 must be allowed. On short screens the workbench scrolls
+        # vertically instead of compressing/cropping fixed-height cards.
+        self.setMinimumSize(1180, 680)
+        self._install_dashboard_scroll()
+        self._apply_readability_policy()
+        self._apply_responsive_spacing()
+
+    def _install_dashboard_scroll(self):
+        if not hasattr(self, "stack") or self.stack.count() == 0:
+            return
+
+        original = self.stack.widget(0)
+        if isinstance(original, QScrollArea):
+            self._dashboard_scroll = original
+            return
+
+        current_index = self.stack.currentIndex()
+        self.stack.removeWidget(original)
+
+        scroll = QScrollArea()
+        scroll.setObjectName("DashboardScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        # Keeps the reference composition intact on 1920×1080, while a
+        # 1280×720 window simply gets a vertical scrollbar instead of clipping.
+        original.setMinimumHeight(790)
+        scroll.setWidget(original)
+        self.stack.insertWidget(0, scroll)
+        self._dashboard_scroll = scroll
+
+        self.stack.setCurrentIndex(max(0, current_index))
+
+    def _apply_readability_policy(self):
+        # Tables: minimum 44px rows everywhere, including dashboard/task/store/URL.
+        for table in self.findChildren(QTableWidget):
+            table.verticalHeader().setMinimumSectionSize(SIZE["table_row_height"])
+            table.verticalHeader().setDefaultSectionSize(SIZE["table_row_height"])
+            table.horizontalHeader().setMinimumHeight(SIZE["table_header_height"])
+
+        # Input/placeholder/disabled contrast.
+        for cls in (QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit):
+            for widget in self.findChildren(cls):
+                palette = widget.palette()
+                palette.setColor(QPalette.PlaceholderText, QColor("#7A869C"))
+                palette.setColor(QPalette.Disabled, QPalette.Text, QColor("#929CAF"))
+                palette.setColor(QPalette.Disabled, QPalette.WindowText, QColor("#929CAF"))
+                widget.setPalette(palette)
+
+        # Standard action buttons should never become text-height-only controls.
+        for btn in self.findChildren(QAbstractButton):
+            if btn.objectName() in {"PrimaryButton", "SecondaryButton", "DangerButton"}:
+                btn.setMinimumHeight(SIZE["control_height"])
+
+    def _apply_responsive_spacing(self):
+        if not self.centralWidget() or not self.centralWidget().layout():
+            return
+
+        outer = self.centralWidget().layout()
+        sidebar = outer.itemAt(0).widget() if outer.count() > 0 else None
+        content = outer.itemAt(1).widget() if outer.count() > 1 else None
+
+        compact = self.width() < 1400
+
+        if sidebar is not None:
+            sidebar.setFixedWidth(
+                SIZE["compact_sidebar_width"]
+                if compact
+                else SIZE["normal_sidebar_width"]
+            )
+
+        if content is not None and content.layout() is not None:
+            if compact:
+                content.layout().setContentsMargins(18, 14, 18, 16)
+                content.layout().setSpacing(12)
+            else:
+                content.layout().setContentsMargins(28, 18, 28, 22)
+                content.layout().setSpacing(14)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._apply_responsive_spacing()
 
     def _topbar(self):
         top = super()._topbar()

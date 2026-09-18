@@ -1,3 +1,5 @@
+from app.ui_tokens import FONT, SIZE
+
 APP_STYLESHEET = r"""
 * {
     font-family: "Microsoft YaHei UI", "Segoe UI";
@@ -46,7 +48,7 @@ QLabel#BrandName {
 
 QLabel#BrandSub {
     color: rgba(231,239,255,182);
-    font-size: 9px;
+    font-size: 12px;
     letter-spacing: 1px;
 }
 
@@ -95,18 +97,18 @@ QFrame#SidebarMiniCard {
 
 QLabel#SidebarMiniTitle {
     color: #FFFFFF;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 700;
 }
 
 QLabel#SidebarMiniText {
     color: rgba(236,242,255,202);
-    font-size: 10px;
+    font-size: 13px;
 }
 
 QLabel#SidebarMiniSub {
     color: rgba(215,226,250,142);
-    font-size: 9px;
+    font-size: 12px;
 }
 
 /* ===== Top area ===== */
@@ -122,8 +124,8 @@ QLabel#PageTitle {
 }
 
 QLabel#PageSub {
-    font-size: 11px;
-    color: #747F9A;
+    font-size: 14px;
+    color: #5F6B85;
 }
 
 QFrame#ConnectionPill {
@@ -138,7 +140,7 @@ QFrame#ConnectionPill {
 
 QLabel#EngineStatus {
     color: #4E5C79;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 600;
 }
 
@@ -158,8 +160,8 @@ QFrame#Card {
 }
 
 QLabel#MetricTitle {
-    color: #76819B;
-    font-size: 11px;
+    color: #58657F;
+    font-size: 14px;
 }
 
 QLabel#MetricValue {
@@ -169,8 +171,8 @@ QLabel#MetricValue {
 }
 
 QLabel#MetricHint {
-    color: #9BA5B9;
-    font-size: 10px;
+    color: #68748B;
+    font-size: 13px;
 }
 
 QLabel#SectionTitle {
@@ -180,13 +182,13 @@ QLabel#SectionTitle {
 }
 
 QLabel#SectionSub {
-    color: #7D89A4;
-    font-size: 10px;
+    color: #65718B;
+    font-size: 13px;
 }
 
 QLabel#SelectionCount {
     color: #64708C;
-    font-size: 10px;
+    font-size: 13px;
     padding: 0 6px;
 }
 
@@ -204,7 +206,7 @@ QPushButton#PrimaryButton {
     border-top: 1px solid rgba(255,255,255,178);
     border-radius: 13px;
     padding: 10px 18px;
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 600;
 }
 
@@ -244,7 +246,7 @@ QPushButton#SecondaryButton {
     border-bottom: 1px solid rgba(190,202,230,155);
     border-radius: 13px;
     padding: 9px 15px;
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 600;
 }
 
@@ -264,7 +266,7 @@ QPushButton#DangerButton {
     border: 1px solid rgba(255,182,203,185);
     border-radius: 13px;
     padding: 9px 14px;
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 600;
 }
 
@@ -323,11 +325,11 @@ QHeaderView::section {
         stop:0 rgba(255,255,255,205),
         stop:1 rgba(237,242,255,168)
     );
-    color: #67738E;
+    color: #53617B;
     border: 0;
     border-bottom: 1px solid rgba(206,216,239,155);
     padding: 10px 8px;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 600;
 }
 
@@ -374,7 +376,7 @@ QPlainTextEdit, QTextEdit {
     border-radius: 16px;
     padding: 12px;
     font-family: Consolas, "Microsoft YaHei UI";
-    font-size: 10px;
+    font-size: 13px;
     selection-background-color: rgba(92,111,213,175);
 }
 
@@ -382,7 +384,7 @@ QPlainTextEdit, QTextEdit {
 QCheckBox {
     color: #35425F;
     spacing: 8px;
-    font-size: 11px;
+    font-size: 14px;
 }
 
 QCheckBox::indicator {
@@ -530,7 +532,7 @@ QLabel#ReferenceFlowNumber {
     background: rgba(190,199,223,155);
     color: #FFFFFF;
     border-radius: 14px;
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 700;
 }
 QLabel#ReferenceFlowNumber[active="true"] {
@@ -538,7 +540,7 @@ QLabel#ReferenceFlowNumber[active="true"] {
 }
 QLabel#ReferenceFlowText {
     color: #7C859C;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 600;
 }
 QLabel#ReferenceFlowText[active="true"] {
@@ -554,7 +556,7 @@ QPushButton#ReferenceTaskSelector {
     color: #5B6680;
     border: 1px dashed rgba(126,149,216,145);
     border-radius: 14px;
-    font-size: 11px;
+    font-size: 14px;
     padding: 12px;
 }
 QPushButton#ReferenceTaskSelector:hover {
@@ -565,7 +567,7 @@ QPushButton#ReferenceTaskSelector:hover {
 
 QLabel#ReferenceControlLabel {
     color: #6F7B96;
-    font-size: 10px;
+    font-size: 13px;
 }
 
 QLineEdit#ReadOnlyQuantity {
@@ -590,7 +592,7 @@ QSpinBox#DelayRangeSpin {
     border-radius: 0;
     padding: 0 4px;
     color: #34405B;
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 600;
 }
 
@@ -631,7 +633,7 @@ QFrame#RunInfoPanel {
 }
 QLabel#RunInfoValue {
     color: #34415E;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 600;
 }
 QLabel#RunStatusBig {
@@ -640,8 +642,8 @@ QLabel#RunStatusBig {
     font-weight: 700;
 }
 QLabel#RunDescription {
-    color: #7E889E;
-    font-size: 10px;
+    color: #65718A;
+    font-size: 13px;
 }
 
 QLabel#RecentClock {
@@ -657,7 +659,7 @@ QPushButton#TableLinkButton {
     border: 0;
     color: #536EFF;
     padding: 4px 6px;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 600;
 }
 QPushButton#TextLinkButton:hover,
@@ -693,7 +695,7 @@ QPushButton#StartRunMainButton {
     border: 0;
     border-right: 1px solid rgba(255,255,255,65);
     padding: 0 13px;
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 700;
     text-align: center;
 }
@@ -759,7 +761,7 @@ QLabel#SidebarSloganSub {
 }
 QLabel#SidebarVersion {
     color: rgba(225,234,255,142);
-    font-size: 9px;
+    font-size: 12px;
 }
 
 
@@ -797,7 +799,7 @@ QLabel#SidebarFooterPlain {
     color: rgba(226,235,255,125);
     background: transparent;
     border: 0;
-    font-size: 9px;
+    font-size: 12px;
     padding: 2px 4px;
 }
 
@@ -833,7 +835,7 @@ QComboBox#TopEqualCombo {
     border-bottom: 1px solid rgba(193,204,230,150);
     padding-left: 13px;
     padding-right: 28px;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 600;
 }
 QComboBox#TopEqualCombo:hover {
@@ -867,7 +869,7 @@ QPushButton#TopRunMain {
     border-top-right-radius: 0px;
     border-bottom-right-radius: 0px;
     padding: 0 10px;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 700;
 }
 QPushButton#TopRunMain:hover {
@@ -923,7 +925,7 @@ QLabel#ToolStatusPill {
     border: 1px solid rgba(189,205,236,170);
     border-radius: 11px;
     padding: 7px 11px;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 600;
 }
 QLabel#ToolStatusPill[state="ok"] {
@@ -944,7 +946,281 @@ QPlainTextEdit#UrlInputBox {
     border-radius: 14px;
     padding: 12px;
     font-family: "Microsoft YaHei UI", "Segoe UI";
-    font-size: 10px;
+    font-size: 13px;
 }
 
 """
+
+
+# ---- V2.7.2 unified readability layer ----
+# The braces are escaped for .format().
+READABILITY_STYLESHEET = r"""
+* {{
+    font-family: "Microsoft YaHei UI", "Segoe UI";
+    font-size: {body}px;
+}}
+
+QWidget#Root {{
+    color: #26344E;
+}}
+
+QLabel#PageTitle {{
+    font-size: {page_title}px;
+    font-weight: 700;
+    color: #101727;
+}}
+
+QLabel#PageSub {{
+    font-size: {aux}px;
+    color: #5F6B85;
+}}
+
+QLabel#BrandName {{
+    font-size: 20px;
+    font-weight: 700;
+}}
+
+QLabel#BrandSub {{
+    font-size: {small}px;
+    color: rgba(239,245,255,220);
+}}
+
+QPushButton#NavButton {{
+    font-size: {sidebar}px;
+    font-weight: 500;
+    min-height: {sidebar_h}px;
+    padding: 10px 14px;
+}}
+
+QLabel#MetricTitle {{
+    font-size: {label}px;
+    font-weight: 600;
+    color: #58657F;
+}}
+
+QLabel#MetricValue {{
+    font-size: {metric_value}px;
+    font-weight: 700;
+    color: #111728;
+}}
+
+QLabel#MetricHint {{
+    font-size: {small}px;
+    color: #68748B;
+}}
+
+QLabel#SectionTitle {{
+    font-size: {section_title}px;
+    font-weight: 600;
+    color: #141B2D;
+}}
+
+QLabel#SectionSub {{
+    font-size: {aux}px;
+    color: #65718B;
+}}
+
+QLabel#SelectionCount,
+QLabel#SidebarMiniSub,
+QLabel#SidebarVersion,
+QLabel#SidebarFooterPlain {{
+    font-size: {small}px;
+}}
+
+QLabel#SidebarMiniTitle {{
+    font-size: {label}px;
+}}
+
+QLabel#SidebarMiniText {{
+    font-size: {aux}px;
+}}
+
+QLabel#EngineStatus {{
+    font-size: {body}px;
+    font-weight: 600;
+    color: #394863;
+}}
+
+QPushButton#PrimaryButton,
+QPushButton#SecondaryButton,
+QPushButton#DangerButton {{
+    min-height: {control_h}px;
+    font-size: {body}px;
+    font-weight: 600;
+    padding: 0 16px;
+}}
+
+QLineEdit,
+QComboBox,
+QSpinBox,
+QDoubleSpinBox {{
+    min-height: {control_h}px;
+    font-size: {body}px;
+    color: #22304A;
+}}
+
+QLineEdit:disabled,
+QComboBox:disabled,
+QSpinBox:disabled,
+QDoubleSpinBox:disabled {{
+    color: #8C96AA;
+}}
+
+QCheckBox {{
+    min-height: 32px;
+    font-size: {body}px;
+    color: #2F3D58;
+    spacing: 9px;
+}}
+
+QCheckBox::indicator {{
+    width: 18px;
+    height: 18px;
+}}
+
+QTableWidget {{
+    font-size: {body}px;
+    color: #2E3B56;
+}}
+
+QHeaderView::section {{
+    min-height: {table_header_h}px;
+    font-size: {table_header}px;
+    font-weight: 500;
+    color: #4F5E79;
+    padding: 8px 9px;
+}}
+
+QTableWidget::item {{
+    font-size: {body}px;
+    padding: 8px 9px;
+}}
+
+QPlainTextEdit,
+QTextEdit {{
+    font-size: {aux}px;
+}}
+
+QPlainTextEdit#UrlInputBox {{
+    font-size: {body}px;
+    color: #2E3B56;
+}}
+
+QTabBar::tab {{
+    font-size: {body}px;
+    min-height: 36px;
+    padding: 8px 16px;
+}}
+
+QMenu {{
+    font-size: {body}px;
+}}
+
+QMenu::item {{
+    min-height: 30px;
+}}
+
+QLabel#ReferenceFlowNumber {{
+    font-size: {body}px;
+    font-weight: 700;
+}}
+
+QLabel#ReferenceFlowText {{
+    font-size: {body}px;
+    font-weight: 600;
+}}
+
+QPushButton#ReferenceTaskSelector {{
+    font-size: {body}px;
+    padding: 12px 14px;
+}}
+
+QLabel#ReferenceControlLabel {{
+    font-size: {label}px;
+    font-weight: 500;
+    color: #596781;
+}}
+
+QLineEdit#ReadOnlyQuantity,
+QSpinBox#DelayRangeSpin,
+QLabel#DelayRangeDash {{
+    font-size: {body}px;
+}}
+
+QPushButton#ReferencePublishButton,
+QPushButton#ReferenceStopPublishButton {{
+    font-size: 15px;
+    font-weight: 700;
+}}
+
+QLabel#RunInfoValue {{
+    font-size: {body}px;
+    font-weight: 600;
+}}
+
+QLabel#RunStatusBig {{
+    font-size: {run_status}px;
+}}
+
+QLabel#RunDescription {{
+    font-size: {aux}px;
+    color: #65718A;
+}}
+
+QPushButton#TextLinkButton,
+QPushButton#TableLinkButton {{
+    font-size: {body}px;
+    font-weight: 600;
+}}
+
+QComboBox#QuickStoreCombo,
+QComboBox#TopEqualCombo {{
+    font-size: {body}px;
+    font-weight: 600;
+}}
+
+QPushButton#StartRunMainButton,
+QPushButton#TopRunMain {{
+    font-size: {body}px;
+    font-weight: 700;
+}}
+
+QToolButton#StartRunArrowButton,
+QToolButton#TopRunArrow {{
+    font-size: {body}px;
+    font-weight: 700;
+}}
+
+QLabel#ToolStatusPill {{
+    font-size: {aux}px;
+    font-weight: 600;
+}}
+
+QLabel#SidebarSlogan {{
+    font-size: 16px;
+}}
+
+QLabel#SidebarSloganSub {{
+    font-size: {body}px;
+}}
+
+QToolTip {{
+    font-size: {aux}px;
+}}
+""".format(
+    page_title=FONT["page_title"],
+    section_title=FONT["section_title"],
+    sidebar=FONT["sidebar"],
+    body=FONT["body"],
+    label=FONT["label"],
+    table_header=FONT["table_header"],
+    aux=FONT["aux"],
+    small=FONT["small"],
+    metric_value=FONT["metric_value"],
+    run_status=FONT["run_status"],
+    control_h=SIZE["control_height"],
+    table_header_h=SIZE["table_header_height"],
+    sidebar_h=SIZE["sidebar_item_height"],
+)
+
+APP_STYLESHEET += READABILITY_STYLESHEET
